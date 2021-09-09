@@ -1,7 +1,7 @@
 Welcome to Obliv-Java!
 ======================
 
-![Crypto-Duke](crypto-duke.gif "Crypto-Duke ready to battle the Adversary!")
+![Crypto-Duke](cryptoduke.gif "Crypto-Duke ready to battle the Adversary!")
 
 1. Installation of dependencies.
 

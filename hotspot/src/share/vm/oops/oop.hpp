@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -30,6 +31,12 @@
 #include "memory/memRegion.hpp"
 #include "oops/metadata.hpp"
 #include "utilities/macros.hpp"
+
+#include <obliv.h>
+#include <oblivoh.h>
+#include "utilities/obliv.hpp"
+
+template<class E> class GrowableArray;
 
 // oopDesc is the top baseclass for objects classes. The {name}Desc classes describe
 // the format of Java objects so the fields can be accessed from C++.
@@ -67,6 +74,8 @@ class oopDesc {
 
   // Fast access to barrier set. Must be initialized.
   static BarrierSet* _bs;
+  static GrowableArray<OblivContainer>* _os;
+  static int _obliv_party;
 
  public:
   markOop  mark()      const { return _mark; }
@@ -76,6 +85,13 @@ class oopDesc {
 
   inline void release_set_mark(markOop m);
   inline markOop cas_set_mark(markOop new_mark, markOop old_mark);
+
+  static GrowableArray<OblivContainer>* oblivStore()            { return _os; }
+  static void set_oblivStore(GrowableArray<OblivContainer>* os) { _os = os; }
+
+  static void set_oblivious_party(int party) { _obliv_party = party; }
+  static int oblivious_party() { return _obliv_party; }
+  static bool is_oblivious() { return _obliv_party >= 0; }
 
   // Used only to re-initialize the mark word (e.g., of promoted
   // objects during a GC) -- requires a valid klass pointer
@@ -194,12 +210,17 @@ class oopDesc {
                                                 volatile HeapWord *dest,
                                                 oop compare_value,
                                                 bool prebarrier = false);
+  inline bool is_obliv(int offset) const;
+  inline void checkAndInitOblivStore();
 
   // Access to fields in a instanceOop through these methods.
   inline oop obj_field(int offset) const;
   inline void obj_field_put(int offset, oop value);
   inline void obj_field_put_raw(int offset, oop value);
   inline void obj_field_put_volatile(int offset, oop value);
+
+  inline OblivContainer oobj_field(int offset) const;
+  inline void oobj_field_put(int offset, OblivContainer value);
 
   inline Metadata* metadata_field(int offset) const;
   inline void metadata_field_put(int offset, Metadata* value);
@@ -210,26 +231,50 @@ class oopDesc {
   inline jbyte byte_field(int offset) const;
   inline void byte_field_put(int offset, jbyte contents);
 
+  inline Obliv obyte_field(int offset) const;
+  inline void obyte_field_put(int offset, Obliv contents);
+
   inline jchar char_field(int offset) const;
   inline void char_field_put(int offset, jchar contents);
+
+  inline Obliv ochar_field(int offset) const;
+  inline void ochar_field_put(int offset, Obliv contents);
 
   inline jboolean bool_field(int offset) const;
   inline void bool_field_put(int offset, jboolean contents);
 
+  inline Obliv obool_field(int offset) const;
+  inline void obool_field_put(int offset, Obliv contents);
+
   inline jint int_field(int offset) const;
   inline void int_field_put(int offset, jint contents);
+
+  inline Obliv oint_field(int offset) const;
+  inline void oint_field_put(int offset, Obliv contents);
 
   inline jshort short_field(int offset) const;
   inline void short_field_put(int offset, jshort contents);
 
+  inline Obliv oshort_field(int offset) const;
+  inline void oshort_field_put(int offset, Obliv contents);
+
   inline jlong long_field(int offset) const;
   inline void long_field_put(int offset, jlong contents);
+
+  inline Obliv olong_field(int offset) const;
+  inline void olong_field_put(int offset, Obliv contents);
 
   inline jfloat float_field(int offset) const;
   inline void float_field_put(int offset, jfloat contents);
 
+  inline Obliv ofloat_field(int offset) const;
+  inline void ofloat_field_put(int offset, Obliv contents);
+
   inline jdouble double_field(int offset) const;
   inline void double_field_put(int offset, jdouble contents);
+
+  inline Obliv odouble_field(int offset) const;
+  inline void odouble_field_put(int offset, Obliv contents);
 
   inline address address_field(int offset) const;
   inline void address_field_put(int offset, address contents);
@@ -237,29 +282,56 @@ class oopDesc {
   inline oop obj_field_acquire(int offset) const;
   inline void release_obj_field_put(int offset, oop value);
 
+  inline OblivContainer oobj_field_acquire(int offset) const;
+  inline void release_oobj_field_put(int offset, OblivContainer value);
+
   inline jbyte byte_field_acquire(int offset) const;
   inline void release_byte_field_put(int offset, jbyte contents);
+
+  inline Obliv obyte_field_acquire(int offset) const;
+  inline void release_obyte_field_put(int offset, Obliv contents);
 
   inline jchar char_field_acquire(int offset) const;
   inline void release_char_field_put(int offset, jchar contents);
 
+  inline Obliv ochar_field_acquire(int offset) const;
+  inline void release_ochar_field_put(int offset, Obliv contents);
+
   inline jboolean bool_field_acquire(int offset) const;
   inline void release_bool_field_put(int offset, jboolean contents);
+
+  inline Obliv obool_field_acquire(int offset) const;
+  inline void release_obool_field_put(int offset, Obliv contents);
 
   inline jint int_field_acquire(int offset) const;
   inline void release_int_field_put(int offset, jint contents);
 
+  inline Obliv oint_field_acquire(int offset) const;
+  inline void release_oint_field_put(int offset, Obliv contents);
+
   inline jshort short_field_acquire(int offset) const;
   inline void release_short_field_put(int offset, jshort contents);
+
+  inline Obliv oshort_field_acquire(int offset) const;
+  inline void release_oshort_field_put(int offset, Obliv contents);
 
   inline jlong long_field_acquire(int offset) const;
   inline void release_long_field_put(int offset, jlong contents);
 
+  inline Obliv olong_field_acquire(int offset) const;
+  inline void release_olong_field_put(int offset, Obliv contents);
+
   inline jfloat float_field_acquire(int offset) const;
   inline void release_float_field_put(int offset, jfloat contents);
 
+  inline Obliv ofloat_field_acquire(int offset) const;
+  inline void release_ofloat_field_put(int offset, Obliv contents);
+
   inline jdouble double_field_acquire(int offset) const;
   inline void release_double_field_put(int offset, jdouble contents);
+
+  inline Obliv odouble_field_acquire(int offset) const;
+  inline void release_odouble_field_put(int offset, Obliv contents);
 
   inline address address_field_acquire(int offset) const;
   inline void release_address_field_put(int offset, address contents);

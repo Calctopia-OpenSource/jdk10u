@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2001, 2005, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -26,6 +27,7 @@
 package jdk.internal.reflect;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 class UnsafeByteFieldAccessorImpl extends UnsafeFieldAccessorImpl {
     UnsafeByteFieldAccessorImpl(Field field) {
@@ -40,12 +42,25 @@ class UnsafeByteFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throw newGetBooleanIllegalArgumentException();
     }
 
+    public boolean revealOblivBoolean(Object obj) throws IllegalArgumentException {
+        throw newGetBooleanIllegalArgumentException();
+    }
+
     public byte getByte(Object obj) throws IllegalArgumentException {
         ensureObj(obj);
         return unsafe.getByte(obj, fieldOffset);
     }
 
+    public byte revealOblivByte(Object obj) throws IllegalArgumentException {
+        ensureObj(obj);
+        return unsafe.revealOblivByte(obj, fieldOffset);
+    }
+
     public char getChar(Object obj) throws IllegalArgumentException {
+        throw newGetCharIllegalArgumentException();
+    }
+
+    public char revealOblivChar(Object obj) throws IllegalArgumentException {
         throw newGetCharIllegalArgumentException();
     }
 
@@ -53,20 +68,40 @@ class UnsafeByteFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         return getByte(obj);
     }
 
+    public short revealOblivShort(Object obj) throws IllegalArgumentException {
+        return revealOblivByte(obj);
+    }
+
     public int getInt(Object obj) throws IllegalArgumentException {
         return getByte(obj);
+    }
+
+    public int revealOblivInt(Object obj) throws IllegalArgumentException {
+        return revealOblivByte(obj);
     }
 
     public long getLong(Object obj) throws IllegalArgumentException {
         return getByte(obj);
     }
 
+    public long revealOblivLong(Object obj) throws IllegalArgumentException {
+        return revealOblivByte(obj);
+    }
+
     public float getFloat(Object obj) throws IllegalArgumentException {
         return getByte(obj);
     }
 
+    public float revealOblivFloat(Object obj) throws IllegalArgumentException {
+        return revealOblivByte(obj);
+    }
+
     public double getDouble(Object obj) throws IllegalArgumentException {
         return getByte(obj);
+    }
+
+    public double revealOblivDouble(Object obj) throws IllegalArgumentException {
+        return revealOblivByte(obj);
     }
 
     public void set(Object obj, Object value)
@@ -92,6 +127,12 @@ class UnsafeByteFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throwSetIllegalArgumentException(z);
     }
 
+    public void condAssignBoolean(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setByte(Object obj, byte b)
         throws IllegalArgumentException, IllegalAccessException
     {
@@ -102,10 +143,35 @@ class UnsafeByteFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         unsafe.putByte(obj, fieldOffset, b);
     }
 
+    public void condAssignByte(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        ensureObj(obj);
+        if (isFinal) {
+            throwFinalFieldIllegalAccessException(of);
+        }
+        long fieldOffsetCond, fieldOffsetByte;
+        if (Modifier.isStatic(cond.getModifiers()))
+            fieldOffsetCond = unsafe.staticFieldOffset(cond);
+        else
+            fieldOffsetCond = unsafe.objectFieldOffset(cond);
+        if (Modifier.isStatic(of.getModifiers()))
+            fieldOffsetByte = unsafe.staticFieldOffset(of);
+        else
+            fieldOffsetByte = unsafe.objectFieldOffset(of);
+        unsafe.condAssignByte(obj, fieldOffset, fieldOffsetCond, fieldOffsetByte);
+    }
+
     public void setChar(Object obj, char c)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(c);
+    }
+
+    public void condAssignChar(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setShort(Object obj, short s)
@@ -114,10 +180,22 @@ class UnsafeByteFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throwSetIllegalArgumentException(s);
     }
 
+    public void condAssignShort(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setInt(Object obj, int i)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(i);
+    }
+
+    public void condAssignInt(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setLong(Object obj, long l)
@@ -126,15 +204,33 @@ class UnsafeByteFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throwSetIllegalArgumentException(l);
     }
 
+    public void condAssignLong(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setFloat(Object obj, float f)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(f);
     }
 
+    public void condAssignFloat(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setDouble(Object obj, double d)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(d);
+    }
+
+    public void condAssignDouble(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 }

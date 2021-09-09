@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -288,6 +289,8 @@ class InstanceKlass: public Klass {
   //     [generic signature index]
   //     ...
   Array<u2>*      _fields;
+  Array<bool>*    _oblivs;
+  Array<int>*     _oblivsParties;
 
   // embedded Java vtable follows here
   // embedded Java itables follows here
@@ -416,6 +419,8 @@ class InstanceKlass: public Klass {
   int     field_access_flags(int index) const { return field(index)->access_flags(); }
   Symbol* field_name        (int index) const { return field(index)->name(constants()); }
   Symbol* field_signature   (int index) const { return field(index)->signature(constants()); }
+  bool    field_is_oblivious(int index) const { if (index >= 0 && index < _oblivs->length()) {return _oblivs->at(index);} else return false; }
+  int     field_obliv_party (int index) const { return _oblivsParties->at(index); }
 
   // Number of Java declared fields
   int java_fields_count() const           { return (int)_java_fields_count; }
@@ -425,6 +430,18 @@ class InstanceKlass: public Klass {
     guarantee(_fields == NULL || f == NULL, "Just checking");
     _fields = f;
     _java_fields_count = java_fields_count;
+  }
+
+  Array<bool>* oblivs() const          { return _oblivs; }
+  void set_oblivs(Array<bool>* o) {
+    guarantee(_oblivs == NULL || o == NULL, "Just checking");
+    _oblivs = o;
+  }
+
+  Array<int>* oblivsParties() const    { return _oblivsParties; }
+  void set_oblivsParties(Array<int>* op) {
+    guarantee(_oblivsParties == NULL || op == NULL, "Just checking");
+    _oblivsParties = op;
   }
 
   // inner classes

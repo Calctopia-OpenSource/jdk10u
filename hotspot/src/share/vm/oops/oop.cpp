@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -38,6 +39,8 @@
 bool always_do_update_barrier = false;
 
 BarrierSet* oopDesc::_bs = NULL;
+GrowableArray<OblivContainer>* oopDesc::_os = NULL;
+int oopDesc::_obliv_party = -1;
 
 void oopDesc::print_on(outputStream* st) const {
   if (this == NULL) {

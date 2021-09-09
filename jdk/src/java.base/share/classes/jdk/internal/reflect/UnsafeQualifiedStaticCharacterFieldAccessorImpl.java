@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2004, 2005, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -26,6 +27,7 @@
 package jdk.internal.reflect;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 class UnsafeQualifiedStaticCharacterFieldAccessorImpl
     extends UnsafeQualifiedStaticFieldAccessorImpl
@@ -42,7 +44,15 @@ class UnsafeQualifiedStaticCharacterFieldAccessorImpl
         throw newGetBooleanIllegalArgumentException();
     }
 
+    public boolean revealOblivBoolean(Object obj) throws IllegalArgumentException {
+        throw newGetBooleanIllegalArgumentException();
+    }
+
     public byte getByte(Object obj) throws IllegalArgumentException {
+        throw newGetByteIllegalArgumentException();
+    }
+
+    public byte revealOblivByte(Object obj) throws IllegalArgumentException {
         throw newGetByteIllegalArgumentException();
     }
 
@@ -50,7 +60,15 @@ class UnsafeQualifiedStaticCharacterFieldAccessorImpl
         return unsafe.getCharVolatile(base, fieldOffset);
     }
 
+    public char revealOblivChar(Object obj) throws IllegalArgumentException {
+        return unsafe.revealOblivCharVolatile(base, fieldOffset);
+    }
+
     public short getShort(Object obj) throws IllegalArgumentException {
+        throw newGetShortIllegalArgumentException();
+    }
+
+    public short revealOblivShort(Object obj) throws IllegalArgumentException {
         throw newGetShortIllegalArgumentException();
     }
 
@@ -58,16 +76,32 @@ class UnsafeQualifiedStaticCharacterFieldAccessorImpl
         return getChar(obj);
     }
 
+    public int revealOblivInt(Object obj) throws IllegalArgumentException {
+        return revealOblivChar(obj);
+    }
+
     public long getLong(Object obj) throws IllegalArgumentException {
         return getChar(obj);
+    }
+
+    public long revealOblivLong(Object obj) throws IllegalArgumentException {
+        return revealOblivChar(obj);
     }
 
     public float getFloat(Object obj) throws IllegalArgumentException {
         return getChar(obj);
     }
 
+    public float revealOblivFloat(Object obj) throws IllegalArgumentException {
+        return revealOblivChar(obj);
+    }
+
     public double getDouble(Object obj) throws IllegalArgumentException {
         return getChar(obj);
+    }
+
+    public double revealOblivDouble(Object obj) throws IllegalArgumentException {
+        return revealOblivChar(obj);
     }
 
     public void set(Object obj, Object value)
@@ -92,10 +126,22 @@ class UnsafeQualifiedStaticCharacterFieldAccessorImpl
         throwSetIllegalArgumentException(z);
     }
 
+    public void condAssignBoolean(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setByte(Object obj, byte b)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(b);
+    }
+
+    public void condAssignByte(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setChar(Object obj, char c)
@@ -107,10 +153,34 @@ class UnsafeQualifiedStaticCharacterFieldAccessorImpl
         unsafe.putCharVolatile(base, fieldOffset, c);
     }
 
+    public void condAssignChar(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (isFinal) {
+            throwFinalFieldIllegalAccessException(of);
+        }
+        long fieldOffsetCond, fieldOffsetChar;
+        if (Modifier.isStatic(cond.getModifiers()))
+            fieldOffsetCond = unsafe.staticFieldOffset(cond);
+        else
+            fieldOffsetCond = unsafe.objectFieldOffset(cond);
+        if (Modifier.isStatic(of.getModifiers()))
+            fieldOffsetChar = unsafe.staticFieldOffset(of);
+        else
+            fieldOffsetChar = unsafe.objectFieldOffset(of);
+        unsafe.condAssignBooleanVolatile(obj, fieldOffset, fieldOffsetCond, fieldOffsetChar);
+    }
+
     public void setShort(Object obj, short s)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(s);
+    }
+
+    public void condAssignShort(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setInt(Object obj, int i)
@@ -119,10 +189,22 @@ class UnsafeQualifiedStaticCharacterFieldAccessorImpl
         throwSetIllegalArgumentException(i);
     }
 
+    public void condAssignInt(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setLong(Object obj, long l)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(l);
+    }
+
+    public void condAssignLong(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setFloat(Object obj, float f)
@@ -131,9 +213,21 @@ class UnsafeQualifiedStaticCharacterFieldAccessorImpl
         throwSetIllegalArgumentException(f);
     }
 
+    public void condAssignFloat(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setDouble(Object obj, double d)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(d);
+    }
+
+    public void condAssignDouble(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 }

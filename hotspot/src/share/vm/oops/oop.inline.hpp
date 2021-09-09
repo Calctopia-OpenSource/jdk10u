@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -41,6 +42,11 @@
 #include "runtime/os.hpp"
 #include "utilities/align.hpp"
 #include "utilities/macros.hpp"
+
+#include <obliv.h>
+#include <oblivoh.h>
+#include "utilities/growableArray.hpp"
+#include "utilities/obliv.hpp"
 
 inline void update_barrier_set(void* p, oop v, bool release = false) {
   assert(oopDesc::bs() != NULL, "Uninitialized bs in oop!");
@@ -427,9 +433,25 @@ oop oopDesc::obj_field(int offset) const {
     load_decode_heap_oop(obj_field_addr<oop>(offset));
 }
 
+OblivContainer oopDesc::oobj_field(int offset) const {
+      	return oopDesc::oblivStore()->at(offset);
+}
+
 void oopDesc::obj_field_put(int offset, oop value) {
   UseCompressedOops ? oop_store(obj_field_addr<narrowOop>(offset), value) :
                       oop_store(obj_field_addr<oop>(offset),       value);
+}
+
+void oopDesc::checkAndInitOblivStore() {
+        if (oopDesc::oblivStore() == NULL) {
+                GrowableArray<OblivContainer>* _os = new (ResourceObj::C_HEAP, mtInternal) GrowableArray<OblivContainer>(10, true);
+                oopDesc::set_oblivStore(_os);
+        }
+}
+
+void oopDesc::oobj_field_put(int offset, OblivContainer value) {
+	checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, value);
 }
 
 void oopDesc::obj_field_put_raw(int offset, oop value) {
@@ -457,26 +479,98 @@ void oopDesc::release_metadata_field_put(int offset, Metadata* value) {
 jbyte oopDesc::byte_field(int offset) const                   { return (jbyte) *byte_field_addr(offset);    }
 void oopDesc::byte_field_put(int offset, jbyte contents)      { *byte_field_addr(offset) = (jint) contents; }
 
+Obliv oopDesc::obyte_field(int offset) const {
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::obyte_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+}
+
 jchar oopDesc::char_field(int offset) const                   { return (jchar) *char_field_addr(offset);    }
 void oopDesc::char_field_put(int offset, jchar contents)      { *char_field_addr(offset) = (jint) contents; }
+
+Obliv oopDesc::ochar_field(int offset) const {
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::ochar_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+}
 
 jboolean oopDesc::bool_field(int offset) const                { return (jboolean) *bool_field_addr(offset); }
 void oopDesc::bool_field_put(int offset, jboolean contents)   { *bool_field_addr(offset) = (((jint) contents) & 1); }
 
+Obliv oopDesc::obool_field(int offset) const {
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::obool_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+}
+
 jint oopDesc::int_field(int offset) const                     { return *int_field_addr(offset);        }
 void oopDesc::int_field_put(int offset, jint contents)        { *int_field_addr(offset) = contents;    }
+
+Obliv oopDesc::oint_field(int offset) const {
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::oint_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+}
 
 jshort oopDesc::short_field(int offset) const                 { return (jshort) *short_field_addr(offset);  }
 void oopDesc::short_field_put(int offset, jshort contents)    { *short_field_addr(offset) = (jint) contents;}
 
+Obliv oopDesc::oshort_field(int offset) const {
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::oshort_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+}
+
 jlong oopDesc::long_field(int offset) const                   { return *long_field_addr(offset);       }
 void oopDesc::long_field_put(int offset, jlong contents)      { *long_field_addr(offset) = contents;   }
+
+Obliv oopDesc::olong_field(int offset) const {
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::olong_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+}
 
 jfloat oopDesc::float_field(int offset) const                 { return *float_field_addr(offset);      }
 void oopDesc::float_field_put(int offset, jfloat contents)    { *float_field_addr(offset) = contents;  }
 
+Obliv oopDesc::ofloat_field(int offset) const {
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::ofloat_field_put(int offset, Obliv contents) {
+	checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+}
+
+bool oopDesc::is_obliv(int offset) const {
+	        if (oopDesc::oblivStore() == NULL)
+	                return false;
+	        if (offset > oopDesc::oblivStore()->length())
+	                return false;
+	        return oopDesc::oblivStore()->at(offset).isInitialized();
+}
+
 jdouble oopDesc::double_field(int offset) const               { return *double_field_addr(offset);     }
 void oopDesc::double_field_put(int offset, jdouble contents)  { *double_field_addr(offset) = contents; }
+
+Obliv oopDesc::odouble_field(int offset) const {
+                return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::odouble_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+}
 
 address oopDesc::address_field(int offset) const              { return *address_field_addr(offset);     }
 void oopDesc::address_field_put(int offset, address contents) { *address_field_addr(offset) = contents; }
@@ -494,29 +588,128 @@ void oopDesc::release_obj_field_put(int offset, oop value) {
     oop_store((volatile oop*)      obj_field_addr<oop>(offset),       value);
 }
 
+OblivContainer oopDesc::oobj_field_acquire(int offset) const {
+	OrderAccess::acquire();
+	return oopDesc::oblivStore()->at(offset);
+}
+void oopDesc::release_oobj_field_put(int offset, OblivContainer value) {
+        checkAndInitOblivStore();
+	OrderAccess::release();
+	oopDesc::oblivStore()->at_put_grow(offset, value);
+	OrderAccess::fence();
+}
+
 jbyte oopDesc::byte_field_acquire(int offset) const                   { return OrderAccess::load_acquire(byte_field_addr(offset));     }
 void oopDesc::release_byte_field_put(int offset, jbyte contents)      { OrderAccess::release_store(byte_field_addr(offset), contents); }
+
+Obliv oopDesc::obyte_field_acquire(int offset) const {
+	OrderAccess::acquire();
+	return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::release_obyte_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+	OrderAccess::release();
+	oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+	OrderAccess::fence();
+}
 
 jchar oopDesc::char_field_acquire(int offset) const                   { return OrderAccess::load_acquire(char_field_addr(offset));     }
 void oopDesc::release_char_field_put(int offset, jchar contents)      { OrderAccess::release_store(char_field_addr(offset), contents); }
 
+Obliv oopDesc::ochar_field_acquire(int offset) const {
+        OrderAccess::acquire();
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::release_ochar_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        OrderAccess::release();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+        OrderAccess::fence();
+}
+
 jboolean oopDesc::bool_field_acquire(int offset) const                { return OrderAccess::load_acquire(bool_field_addr(offset));     }
 void oopDesc::release_bool_field_put(int offset, jboolean contents)   { OrderAccess::release_store(bool_field_addr(offset), (contents & 1)); }
+
+Obliv oopDesc::obool_field_acquire(int offset) const {
+        OrderAccess::acquire();
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::release_obool_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        OrderAccess::release();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+        OrderAccess::fence();
+}
 
 jint oopDesc::int_field_acquire(int offset) const                     { return OrderAccess::load_acquire(int_field_addr(offset));      }
 void oopDesc::release_int_field_put(int offset, jint contents)        { OrderAccess::release_store(int_field_addr(offset), contents);  }
 
+Obliv oopDesc::oint_field_acquire(int offset) const {
+        OrderAccess::acquire();
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::release_oint_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        OrderAccess::release();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+        OrderAccess::fence();
+}
+
 jshort oopDesc::short_field_acquire(int offset) const                 { return (jshort)OrderAccess::load_acquire(short_field_addr(offset)); }
 void oopDesc::release_short_field_put(int offset, jshort contents)    { OrderAccess::release_store(short_field_addr(offset), contents);     }
+
+Obliv oopDesc::oshort_field_acquire(int offset) const {
+        OrderAccess::acquire();
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::release_oshort_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        OrderAccess::release();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+        OrderAccess::fence();
+}
 
 jlong oopDesc::long_field_acquire(int offset) const                   { return OrderAccess::load_acquire(long_field_addr(offset));       }
 void oopDesc::release_long_field_put(int offset, jlong contents)      { OrderAccess::release_store(long_field_addr(offset), contents);   }
 
+Obliv oopDesc::olong_field_acquire(int offset) const {
+        OrderAccess::acquire();
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::release_olong_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        OrderAccess::release();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+        OrderAccess::fence();
+}
+
 jfloat oopDesc::float_field_acquire(int offset) const                 { return OrderAccess::load_acquire(float_field_addr(offset));      }
 void oopDesc::release_float_field_put(int offset, jfloat contents)    { OrderAccess::release_store(float_field_addr(offset), contents);  }
 
+Obliv oopDesc::ofloat_field_acquire(int offset) const {
+        OrderAccess::acquire();
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::release_ofloat_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        OrderAccess::release();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+        OrderAccess::fence();
+}
+
 jdouble oopDesc::double_field_acquire(int offset) const               { return OrderAccess::load_acquire(double_field_addr(offset));     }
 void oopDesc::release_double_field_put(int offset, jdouble contents)  { OrderAccess::release_store(double_field_addr(offset), contents); }
+
+Obliv oopDesc::odouble_field_acquire(int offset) const {
+        OrderAccess::acquire();
+        return oopDesc::oblivStore()->at(offset).getObliv();
+}
+void oopDesc::release_odouble_field_put(int offset, Obliv contents) {
+        checkAndInitOblivStore();
+        OrderAccess::release();
+        oopDesc::oblivStore()->at_put_grow(offset, OblivContainer(contents));
+        OrderAccess::fence();
+}
 
 address oopDesc::address_field_acquire(int offset) const              { return (address) OrderAccess::load_ptr_acquire(address_field_addr(offset)); }
 void oopDesc::release_address_field_put(int offset, address contents) { OrderAccess::release_store_ptr(address_field_addr(offset), contents); }

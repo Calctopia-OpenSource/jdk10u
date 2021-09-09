@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2001, 2005, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -26,6 +27,7 @@
 package jdk.internal.reflect;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl {
     UnsafeStaticBooleanFieldAccessorImpl(Field field) {
@@ -40,7 +42,15 @@ class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl
         return unsafe.getBoolean(base, fieldOffset);
     }
 
+    public boolean revealOblivBoolean(Object obj) throws IllegalArgumentException {
+        return unsafe.revealOblivBoolean(base, fieldOffset);
+    }
+
     public byte getByte(Object obj) throws IllegalArgumentException {
+        throw newGetByteIllegalArgumentException();
+    }
+
+    public byte revealOblivByte(Object obj) throws IllegalArgumentException {
         throw newGetByteIllegalArgumentException();
     }
 
@@ -48,7 +58,15 @@ class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl
         throw newGetCharIllegalArgumentException();
     }
 
+    public char revealOblivChar(Object obj) throws IllegalArgumentException {
+        throw newGetCharIllegalArgumentException();
+    }
+
     public short getShort(Object obj) throws IllegalArgumentException {
+        throw newGetShortIllegalArgumentException();
+    }
+
+    public short revealOblivShort(Object obj) throws IllegalArgumentException {
         throw newGetShortIllegalArgumentException();
     }
 
@@ -56,7 +74,15 @@ class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl
         throw newGetIntIllegalArgumentException();
     }
 
+    public int revealOblivInt(Object obj) throws IllegalArgumentException {
+        throw newGetIntIllegalArgumentException();
+    }
+
     public long getLong(Object obj) throws IllegalArgumentException {
+        throw newGetLongIllegalArgumentException();
+    }
+
+    public long revealOblivLong(Object obj) throws IllegalArgumentException {
         throw newGetLongIllegalArgumentException();
     }
 
@@ -64,7 +90,15 @@ class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl
         throw newGetFloatIllegalArgumentException();
     }
 
+    public float revealOblivFloat(Object obj) throws IllegalArgumentException {
+        throw newGetFloatIllegalArgumentException();
+    }
+
     public double getDouble(Object obj) throws IllegalArgumentException {
+        throw newGetDoubleIllegalArgumentException();
+    }
+
+    public double revealOblivDouble(Object obj) throws IllegalArgumentException {
         throw newGetDoubleIllegalArgumentException();
     }
 
@@ -93,10 +127,35 @@ class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl
         unsafe.putBoolean(base, fieldOffset, z);
     }
 
+    public void condAssignBoolean(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        ensureObj(obj);
+        if (isFinal) {
+            throwFinalFieldIllegalAccessException(of);
+        }
+        long fieldOffsetCond, fieldOffsetBoolean;
+        if (Modifier.isStatic(cond.getModifiers()))
+            fieldOffsetCond = unsafe.staticFieldOffset(cond);
+        else
+            fieldOffsetCond = unsafe.objectFieldOffset(cond);
+        if (Modifier.isStatic(of.getModifiers()))
+            fieldOffsetBoolean = unsafe.staticFieldOffset(of);
+        else
+            fieldOffsetBoolean = unsafe.objectFieldOffset(of);
+        unsafe.condAssignBoolean(obj, fieldOffset, fieldOffsetCond, fieldOffsetBoolean);
+    }
+
     public void setByte(Object obj, byte b)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(b);
+    }
+
+    public void condAssignByte(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setChar(Object obj, char c)
@@ -105,10 +164,22 @@ class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl
         throwSetIllegalArgumentException(c);
     }
 
+    public void condAssignChar(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setShort(Object obj, short s)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(s);
+    }
+
+    public void condAssignShort(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setInt(Object obj, int i)
@@ -117,10 +188,22 @@ class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl
         throwSetIllegalArgumentException(i);
     }
 
+    public void condAssignInt(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setLong(Object obj, long l)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(l);
+    }
+
+    public void condAssignLong(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setFloat(Object obj, float f)
@@ -129,9 +212,21 @@ class UnsafeStaticBooleanFieldAccessorImpl extends UnsafeStaticFieldAccessorImpl
         throwSetIllegalArgumentException(f);
     }
 
+    public void condAssignFloat(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setDouble(Object obj, double d)
         throws IllegalArgumentException, IllegalAccessException
     {
         throwSetIllegalArgumentException(d);
+    }
+
+    public void condAssignDouble(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 }

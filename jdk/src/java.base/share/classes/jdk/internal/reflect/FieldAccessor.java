@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2001, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -30,6 +31,8 @@ package jdk.internal.reflect;
     (possibly dynamically-generated) class which implements this
     interface. */
 
+import java.lang.reflect.Field;
+
 public interface FieldAccessor {
     /** Matches specification in {@link java.lang.reflect.Field} */
     public Object get(Object obj) throws IllegalArgumentException;
@@ -37,26 +40,42 @@ public interface FieldAccessor {
     /** Matches specification in {@link java.lang.reflect.Field} */
     public boolean getBoolean(Object obj) throws IllegalArgumentException;
 
+    public boolean revealOblivBoolean(Object obj) throws IllegalArgumentException;
+
     /** Matches specification in {@link java.lang.reflect.Field} */
     public byte getByte(Object obj) throws IllegalArgumentException;
+
+    public byte revealOblivByte(Object obj) throws IllegalArgumentException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
     public char getChar(Object obj) throws IllegalArgumentException;
 
+    public char revealOblivChar(Object obj) throws IllegalArgumentException;
+
     /** Matches specification in {@link java.lang.reflect.Field} */
     public short getShort(Object obj) throws IllegalArgumentException;
+
+    public short revealOblivShort(Object obj) throws IllegalArgumentException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
     public int getInt(Object obj) throws IllegalArgumentException;
 
+    public int revealOblivInt(Object obj) throws IllegalArgumentException;
+
     /** Matches specification in {@link java.lang.reflect.Field} */
     public long getLong(Object obj) throws IllegalArgumentException;
+
+    public long revealOblivLong(Object obj) throws IllegalArgumentException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
     public float getFloat(Object obj) throws IllegalArgumentException;
 
+    public float revealOblivFloat(Object obj) throws IllegalArgumentException;
+
     /** Matches specification in {@link java.lang.reflect.Field} */
     public double getDouble(Object obj) throws IllegalArgumentException;
+
+    public double revealOblivDouble(Object obj) throws IllegalArgumentException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
     public void set(Object obj, Object value)
@@ -67,7 +86,15 @@ public interface FieldAccessor {
         throws IllegalArgumentException, IllegalAccessException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
+    public void condAssignBoolean(Object obj, Field cond, Field oz)
+        throws IllegalArgumentException, IllegalAccessException;
+
+    /** Matches specification in {@link java.lang.reflect.Field} */
     public void setByte(Object obj, byte b)
+        throws IllegalArgumentException, IllegalAccessException;
+
+    /** Matches specification in {@link java.lang.reflect.Field} */
+    public void condAssignByte(Object obj, Field cond, Field ob)
         throws IllegalArgumentException, IllegalAccessException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
@@ -75,7 +102,15 @@ public interface FieldAccessor {
         throws IllegalArgumentException, IllegalAccessException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
+    public void condAssignChar(Object obj, Field cond, Field oc)
+        throws IllegalArgumentException, IllegalAccessException;
+
+    /** Matches specification in {@link java.lang.reflect.Field} */
     public void setShort(Object obj, short s)
+        throws IllegalArgumentException, IllegalAccessException;
+
+    /** Matches specification in {@link java.lang.reflect.Field} */
+    public void condAssignShort(Object obj, Field cond, Field os)
         throws IllegalArgumentException, IllegalAccessException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
@@ -83,7 +118,15 @@ public interface FieldAccessor {
         throws IllegalArgumentException, IllegalAccessException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
+    public void condAssignInt(Object obj, Field cond, Field oi)
+        throws IllegalArgumentException, IllegalAccessException;
+
+    /** Matches specification in {@link java.lang.reflect.Field} */
     public void setLong(Object obj, long l)
+        throws IllegalArgumentException, IllegalAccessException;
+
+    /** Matches specification in {@link java.lang.reflect.Field} */
+    public void condAssignLong(Object obj, Field cond, Field ol)
         throws IllegalArgumentException, IllegalAccessException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
@@ -91,6 +134,14 @@ public interface FieldAccessor {
         throws IllegalArgumentException, IllegalAccessException;
 
     /** Matches specification in {@link java.lang.reflect.Field} */
+    public void condAssignFloat(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException;
+
+    /** Matches specification in {@link java.lang.reflect.Field} */
     public void setDouble(Object obj, double d)
+        throws IllegalArgumentException, IllegalAccessException;
+
+    /** Matches specification in {@link java.lang.reflect.Field} */
+    public void condAssignDouble(Object obj, Field cond, Field od)
         throws IllegalArgumentException, IllegalAccessException;
 }

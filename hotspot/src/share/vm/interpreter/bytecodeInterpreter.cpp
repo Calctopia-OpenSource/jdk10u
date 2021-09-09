@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2002, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -48,6 +49,10 @@
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/threadCritical.hpp"
 #include "utilities/exceptions.hpp"
+
+#include <obliv.h>
+#include <oblivoh.h>
+#include "utilities/growableArray.hpp"
 
 // no precompiled headers
 #ifdef CC_INTERP
@@ -466,6 +471,10 @@ BytecodeInterpreter::run(interpreterState istate) {
   static intptr_t* c_addr = NULL;
   static intptr_t  c_value;
 
+  static GrowableArray<OblivContainer>* _oblivStack = NULL;
+  static bool passingComparisonBetweenOpcodes = false;
+  static oint oblivComparison;
+
   if (checkit && *c_addr != c_value) {
     os::breakpoint();
   }
@@ -623,6 +632,8 @@ BytecodeInterpreter::run(interpreterState istate) {
 #ifdef VM_JVMTI
       _jvmti_interp_events = JvmtiExport::can_post_interpreter_events();
 #endif
+      ResourceMark rm;
+      _oblivStack = new (ResourceObj::C_HEAP, mtInternal) GrowableArray<OblivContainer>(10, true);
       return;
     }
     break;
@@ -1015,7 +1026,18 @@ run:
 
           OPC_CONST_n(_iconst_m1,   INT,       -1);
           OPC_CONST_n(_iconst_0,    INT,        0);
-          OPC_CONST_n(_iconst_1,    INT,        1);
+          //OPC_CONST_n(_iconst_1,    INT,        1);
+      CASE(_iconst_1):
+      {                                                     
+          if (passingComparisonBetweenOpcodes) {
+            Obliv newOblivVal(oblivComparison, 0, Obliv::INT);
+            _oblivStack->push(OblivContainer(newOblivVal));
+            SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(0));
+            passingComparisonBetweenOpcodes = false;
+	  }
+          SET_STACK_INT(1, 0);                           
+          UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
+      }
           OPC_CONST_n(_iconst_2,    INT,        2);
           OPC_CONST_n(_iconst_3,    INT,        3);
           OPC_CONST_n(_iconst_4,    INT,        4);
@@ -1272,14 +1294,53 @@ run:
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, -2);                        \
       }
 
-      OPC_INT_BINARY(add, Add, 0);
-      OPC_INT_BINARY(sub, Sub, 0);
-      OPC_INT_BINARY(mul, Mul, 0);
-      OPC_INT_BINARY(and, And, 0);
-      OPC_INT_BINARY(or,  Or,  0);
-      OPC_INT_BINARY(xor, Xor, 0);
-      OPC_INT_BINARY(div, Div, 1);
-      OPC_INT_BINARY(rem, Rem, 1);
+#undef  OPC_OINT_BINARY
+#define OPC_OINT_BINARY(opcname, opname, test)                           \
+      CASE(_i##opcname):                                                \
+          if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1) &&                 \
+              IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -2)) {                 \
+            SET_STACK_OBLIVIOUS_INT(VMObliviousInt##opname(topOfStack, _oblivStack), \
+                                                          -2);             \
+          } else {                                                         \
+            if (test && (STACK_INT(-1) == 0)) {                           \
+                VM_JAVA_ERROR(vmSymbols::java_lang_ArithmeticException(), \
+                              "/ by zero", note_div0Check_trap);          \
+            }                                                             \
+            SET_STACK_INT(VMint##opname(STACK_INT(-2),                    \
+                                        STACK_INT(-1)),                   \
+                                        -2);                              \
+          }                                                             \
+          UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);                        \
+      CASE(_l##opcname):                                                \
+      {                                                                 \
+          if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -1) &&                 \
+              IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -3)) {                  \
+            SET_STACK_OBLIVIOUS_LONG(VMObliviousLong##opname(topOfStack, _oblivStack), \
+                                                          -3);             \
+          } else {                                                        \
+            if (test) {                                                   \
+              jlong l1 = STACK_LONG(-1);                                  \
+              if (VMlongEqz(l1)) {                                        \
+                VM_JAVA_ERROR(vmSymbols::java_lang_ArithmeticException(), \
+                              "/ by long zero", note_div0Check_trap);     \
+              }                                                           \
+            }                                                             \
+            /* First long at (-1,-2) next long at (-3,-4) */              \
+            SET_STACK_LONG(VMlong##opname(STACK_LONG(-3),                 \
+                                        STACK_LONG(-1)),                \
+                                        -3);                            \
+          }                                                             \
+          UPDATE_PC_AND_TOS_AND_CONTINUE(1, -2);                        \
+      }
+
+      OPC_OINT_BINARY(add, Add, 0);
+      OPC_OINT_BINARY(sub, Sub, 0);
+      OPC_OINT_BINARY(mul, Mul, 0);
+      OPC_OINT_BINARY(and, And, 0);
+      OPC_OINT_BINARY(or,  Or,  0);
+      OPC_OINT_BINARY(xor, Xor, 0);
+      OPC_OINT_BINARY(div, Div, 1);
+      OPC_OINT_BINARY(rem, Rem, 1);
 
 
       /* Perform various binary floating number operations */
@@ -1299,12 +1360,35 @@ run:
                                           -2);                             \
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
 
+#undef  OPC_OFLOAT_BINARY
+#define OPC_OFLOAT_BINARY(opcname, opname)                                  \
+      CASE(_d##opcname): {                                                 \
+          if (IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack, -3) &&                 \
+              IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack, -1))                   \
+            SET_STACK_OBLIVIOUS_DOUBLE(VMObliviousDouble##opname(topOfStack, _oblivStack), \
+                                                          -3);             \
+          else                                                             \
+          SET_STACK_DOUBLE(VMdouble##opname(STACK_DOUBLE(-3),              \
+                                            STACK_DOUBLE(-1)),             \
+                                            -3);                           \
+          UPDATE_PC_AND_TOS_AND_CONTINUE(1, -2);                           \
+      }                                                                    \
+      CASE(_f##opcname):                                                   \
+          if (IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -1) &&                  \
+              IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -2))                    \
+            SET_STACK_OBLIVIOUS_FLOAT(VMObliviousFloat##opname(topOfStack, _oblivStack),  \
+                                                          -2);             \
+          else                                                             \
+          SET_STACK_FLOAT(VMfloat##opname(STACK_FLOAT(-2),                 \
+                                          STACK_FLOAT(-1)),                \
+                                          -2);                             \
+          UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
 
-     OPC_FLOAT_BINARY(add, Add);
-     OPC_FLOAT_BINARY(sub, Sub);
-     OPC_FLOAT_BINARY(mul, Mul);
-     OPC_FLOAT_BINARY(div, Div);
-     OPC_FLOAT_BINARY(rem, Rem);
+     OPC_OFLOAT_BINARY(add, Add);
+     OPC_OFLOAT_BINARY(sub, Sub);
+     OPC_OFLOAT_BINARY(mul, Mul);
+     OPC_OFLOAT_BINARY(div, Div);
+     OPC_OFLOAT_BINARY(rem, Rem);
 
       /* Shift operations
        * Shift left int and long: ishl, lshl
@@ -1327,9 +1411,36 @@ run:
          UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);                         \
       }
 
-      OPC_SHIFT_BINARY(shl, Shl);
-      OPC_SHIFT_BINARY(shr, Shr);
-      OPC_SHIFT_BINARY(ushr, Ushr);
+#undef  OPC_OSHIFT_BINARY
+#define OPC_OSHIFT_BINARY(opcname, opname)                               \
+      CASE(_i##opcname):                                                \
+          if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1) &&                 \
+              IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -2)) {                 \
+            SET_STACK_OBLIVIOUS_INT(VMObliviousInt##opname(topOfStack, _oblivStack), \
+                                                          -2);             \
+          } else {                                                      \
+            SET_STACK_INT(VMint##opname(STACK_INT(-2),                  \
+                                     STACK_INT(-1)),                    \
+                                     -2);                               \
+          }                                                             \
+         UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);                         \
+      CASE(_l##opcname):                                                \
+      {                                                                 \
+          if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -1) &&                 \
+              IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -2)) {                  \
+            SET_STACK_OBLIVIOUS_LONG(VMObliviousLong##opname(topOfStack, _oblivStack), \
+                                                          -2);             \
+          } else {                                                      \
+            SET_STACK_LONG(VMlong##opname(STACK_LONG(-2),                  \
+                                       STACK_INT(-1)),                  \
+                                       -2);                             \
+          }                                                             \
+         UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);                         \
+      }
+
+      OPC_OSHIFT_BINARY(shl, Shl);
+      OPC_OSHIFT_BINARY(shr, Shr);
+      OPC_OSHIFT_BINARY(ushr, Ushr);
 
      /* Increment local variable by constant */
       CASE(_iinc):
@@ -1342,138 +1453,250 @@ run:
      /* negate the value on the top of the stack */
 
       CASE(_ineg):
+        if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+         SET_STACK_OBLIVIOUS_INT(VMObliviousIntNeg(topOfStack, _oblivStack), -1);
+        } else {
          SET_STACK_INT(VMintNeg(STACK_INT(-1)), -1);
+        }
          UPDATE_PC_AND_CONTINUE(1);
 
       CASE(_fneg):
+        if (IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+         SET_STACK_OBLIVIOUS_FLOAT(VMObliviousFloatNeg(topOfStack, _oblivStack), -1);
+        } else {
          SET_STACK_FLOAT(VMfloatNeg(STACK_FLOAT(-1)), -1);
+        }
          UPDATE_PC_AND_CONTINUE(1);
 
       CASE(_lneg):
       {
+        if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+         SET_STACK_OBLIVIOUS_LONG(VMObliviousLongNeg(topOfStack, _oblivStack), -1);
+        } else {
          SET_STACK_LONG(VMlongNeg(STACK_LONG(-1)), -1);
+        }
          UPDATE_PC_AND_CONTINUE(1);
       }
 
       CASE(_dneg):
       {
+        if (IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack,-1)) {
+         SET_STACK_OBLIVIOUS_DOUBLE(VMObliviousDoubleNeg(topOfStack, _oblivStack), -1);
+        } else {
          SET_STACK_DOUBLE(VMdoubleNeg(STACK_DOUBLE(-1)), -1);
+        }
          UPDATE_PC_AND_CONTINUE(1);
       }
 
       /* Conversion operations */
 
       CASE(_i2f):       /* convert top of stack int to float */
+      {
+        if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+         SET_STACK_OBLIVIOUS_FLOAT(VMObliviousInt2Float(topOfStack, _oblivStack), -1);
+        } else {
          SET_STACK_FLOAT(VMint2Float(STACK_INT(-1)), -1);
+        }
          UPDATE_PC_AND_CONTINUE(1);
-
+      }
       CASE(_i2l):       /* convert top of stack int to long */
       {
+        if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          jlong r = VMObliviousInt2Long(topOfStack, _oblivStack);
+          MORE_STACK(-1); // Pop
+	  SET_STACK_LONG_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(1));
+          SET_STACK_OBLIVIOUS_LONG(r, 1);
+        } else {
           // this is ugly QQQ
           jlong r = VMint2Long(STACK_INT(-1));
           MORE_STACK(-1); // Pop
           SET_STACK_LONG(r, 1);
+        }
 
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 2);
       }
 
       CASE(_i2d):       /* convert top of stack int to double */
       {
+        if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          jdouble r = VMObliviousInt2Double(topOfStack, _oblivStack);
+          MORE_STACK(-1); //Pop
+	  SET_STACK_DOUBLE_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(1));
+          SET_STACK_OBLIVIOUS_DOUBLE(r, 1);
+        } else {
           // this is ugly QQQ (why cast to jlong?? )
           jdouble r = (jlong)STACK_INT(-1);
           MORE_STACK(-1); // Pop
           SET_STACK_DOUBLE(r, 1);
+        }
 
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 2);
       }
 
       CASE(_l2i):       /* convert top of stack long to int */
       {
+        if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          jint r = VMObliviousLong2Int(topOfStack, _oblivStack);
+          MORE_STACK(-2); // Pop
+	  SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(0));
+          SET_STACK_INT(r, 0);
+        } else {
           jint r = VMlong2Int(STACK_LONG(-1));
           MORE_STACK(-2); // Pop
           SET_STACK_INT(r, 0);
+        }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
       }
 
       CASE(_l2f):   /* convert top of stack long to float */
       {
+        if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          jfloat r = VMObliviousLong2Float(topOfStack, _oblivStack);
+          MORE_STACK(-2); // Pop
+	  SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(0));
+          SET_STACK_FLOAT(r, 0);
+        } else {
           jlong r = STACK_LONG(-1);
           MORE_STACK(-2); // Pop
           SET_STACK_FLOAT(VMlong2Float(r), 0);
+        }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
       }
 
       CASE(_l2d):       /* convert top of stack long to double */
       {
+        if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          jdouble d = VMObliviousLong2Double(topOfStack, _oblivStack);
+          MORE_STACK(-2); // Pop
+	  SET_STACK_DOUBLE_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(1));
+          SET_STACK_DOUBLE(d, 1);
+        } else {
           jlong r = STACK_LONG(-1);
           MORE_STACK(-2); // Pop
           SET_STACK_DOUBLE(VMlong2Double(r), 1);
+        }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 2);
       }
 
       CASE(_f2i):  /* Convert top of stack float to int */
+      {
+        if (IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          SET_STACK_OBLIVIOUS_INT(VMObliviousFloat2Int(topOfStack, _oblivStack), -1);
+        } else {
           SET_STACK_INT(SharedRuntime::f2i(STACK_FLOAT(-1)), -1);
+        }
           UPDATE_PC_AND_CONTINUE(1);
-
+      }
       CASE(_f2l):  /* convert top of stack float to long */
       {
+        if (IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          jlong r = VMObliviousFloat2Long(topOfStack, _oblivStack);
+          MORE_STACK(-1); // POP
+	  SET_STACK_LONG_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(1));
+          SET_STACK_OBLIVIOUS_LONG(r, 1);
+        } else {
           jlong r = SharedRuntime::f2l(STACK_FLOAT(-1));
           MORE_STACK(-1); // POP
           SET_STACK_LONG(r, 1);
+	}
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 2);
       }
 
       CASE(_f2d):  /* convert top of stack float to double */
       {
+         if (IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          jdouble r = VMObliviousFloat2Double(topOfStack, _oblivStack);
+          MORE_STACK(-1); // POP
+	  SET_STACK_DOUBLE_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(1));
+          SET_STACK_DOUBLE(r, 1);
+         } else {
           jfloat f;
           jdouble r;
           f = STACK_FLOAT(-1);
           r = (jdouble) f;
           MORE_STACK(-1); // POP
           SET_STACK_DOUBLE(r, 1);
+         }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 2);
       }
 
       CASE(_d2i): /* convert top of stack double to int */
       {
+         if (IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+	  jint r1 = VMObliviousDouble2Int(topOfStack, _oblivStack);
+          MORE_STACK(-2);
+	  SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(0));
+          SET_STACK_OBLIVIOUS_INT(r1, 0);
+         } else {
           jint r1 = SharedRuntime::d2i(STACK_DOUBLE(-1));
           MORE_STACK(-2);
           SET_STACK_INT(r1, 0);
+	 }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
       }
 
       CASE(_d2f): /* convert top of stack double to float */
       {
+         if (IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          jfloat r1 = VMObliviousDouble2Float(topOfStack, _oblivStack);
+          MORE_STACK(-2);
+	  SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(0));
+          SET_STACK_FLOAT(r1, 0);
+         } else {
           jfloat r1 = VMdouble2Float(STACK_DOUBLE(-1));
           MORE_STACK(-2);
           SET_STACK_FLOAT(r1, 0);
+         }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
       }
 
       CASE(_d2l): /* convert top of stack double to long */
       {
+         if (IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack,-1)) {
+          jlong r1 = VMObliviousDouble2Long(topOfStack, _oblivStack);
+          MORE_STACK(-2);
+	  SET_STACK_LONG_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(1));
+          SET_STACK_LONG(r1, 1);
+         } else {
           jlong r1 = SharedRuntime::d2l(STACK_DOUBLE(-1));
           MORE_STACK(-2);
           SET_STACK_LONG(r1, 1);
+	 }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 2);
       }
 
       CASE(_i2b):
+      {
+         if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          SET_STACK_OBLIVIOUS_INT(VMObliviousInt2Byte(topOfStack, _oblivStack), -1);
+         } else {
           SET_STACK_INT(VMint2Byte(STACK_INT(-1)), -1);
+         }
           UPDATE_PC_AND_CONTINUE(1);
-
+      }
       CASE(_i2c):
+      {
+         if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          SET_STACK_OBLIVIOUS_INT(VMObliviousInt2Char(topOfStack, _oblivStack), -1);
+         } else {
           SET_STACK_INT(VMint2Char(STACK_INT(-1)), -1);
+         }
           UPDATE_PC_AND_CONTINUE(1);
-
+      }
       CASE(_i2s):
+      {
+         if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+          SET_STACK_OBLIVIOUS_INT(VMObliviousInt2Short(topOfStack, _oblivStack), -1);
+         } else {
           SET_STACK_INT(VMint2Short(STACK_INT(-1)), -1);
+         }
           UPDATE_PC_AND_CONTINUE(1);
+      }
 
       /* comparison operators */
 
 
-#define COMPARISON_OP(name, comparison)                                      \
+#define COMPARISON_OP_OLD(name, comparison)                                  \
       CASE(_if_icmp##name): {                                                \
           const bool cmp = (STACK_INT(-2) comparison STACK_INT(-1));         \
           int skip = cmp                                                     \
@@ -1497,8 +1720,57 @@ run:
           CONTINUE;                                                          \
       }
 
-#define COMPARISON_OP2(name, comparison)                                     \
-      COMPARISON_OP(name, comparison)                                        \
+#define COMPARISON_OP(name, comparison, oblivIfCmp, oblivIf)                 \
+      CASE(_if_icmp##name): {                                                \
+          bool cmp; int skip;                                                \
+          if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1) &&         \
+              IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -2)) {         \
+            SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));                \
+            oint oop2 = _oblivStack->pop().getObliv().getInt();              \
+            SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-2));                \
+            oint oop1 = _oblivStack->pop().getObliv().getInt();              \
+            oblivComparison = flip1and0(&__obliv_c__trueCond,                \
+                     oblivIfCmp(&__obliv_c__trueCond, oop1, oop2));        \
+            passingComparisonBetweenOpcodes = true;                          \
+            /*never take branch*/                                            \
+            cmp = 0; skip = 3;                                               \
+          } else {                                                           \
+            cmp = (STACK_INT(-2) comparison STACK_INT(-1));                  \
+            skip = cmp                                                       \
+                      ? (int16_t)Bytes::get_Java_u2(pc + 1) : 3;             \
+          }                                                                  \
+          address branch_pc = pc;                                            \
+          /* Profile branch. */                                              \
+          BI_PROFILE_UPDATE_BRANCH(/*is_taken=*/cmp);                        \
+          UPDATE_PC_AND_TOS(skip, -2);                                       \
+          DO_BACKEDGE_CHECKS(skip, branch_pc);                               \
+          CONTINUE;                                                          \
+      }                                                                      \
+      CASE(_if##name): {                                                     \
+          bool cmp; int skip;                                                \
+          if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {         \
+            SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));                \
+            oint oop1 = _oblivStack->pop().getObliv().getInt();              \
+            oblivComparison = flip1and0(&__obliv_c__trueCond,                \
+                     oblivIf(&__obliv_c__trueCond, oop1));                 \
+            passingComparisonBetweenOpcodes = true;                          \
+            /*never take branch*/                                            \
+            cmp = 0; skip = 3;                                               \
+          } else {                                                           \
+            cmp = (STACK_INT(-1) comparison 0);                              \
+            skip = cmp                                                       \
+                      ? (int16_t)Bytes::get_Java_u2(pc + 1) : 3;             \
+          }                                                                  \
+          address branch_pc = pc;                                            \
+          /* Profile branch. */                                              \
+          BI_PROFILE_UPDATE_BRANCH(/*is_taken=*/cmp);                        \
+          UPDATE_PC_AND_TOS(skip, -1);                                       \
+          DO_BACKEDGE_CHECKS(skip, branch_pc);                               \
+          CONTINUE;                                                          \
+      }
+
+#define COMPARISON_OP2(name, comparison, oblivIfCmp, oblivIf)                \
+      COMPARISON_OP(name, comparison, oblivIfCmp, oblivIf)                   \
       CASE(_if_acmp##name): {                                                \
           const bool cmp = (STACK_OBJECT(-2) comparison STACK_OBJECT(-1));   \
           int skip = cmp                                                     \
@@ -1536,12 +1808,12 @@ run:
           DO_BACKEDGE_CHECKS(skip, branch_pc);                               \
           CONTINUE;                                                          \
       }
-      COMPARISON_OP(lt, <);
-      COMPARISON_OP(gt, >);
-      COMPARISON_OP(le, <=);
-      COMPARISON_OP(ge, >=);
-      COMPARISON_OP2(eq, ==);  /* include ref comparison */
-      COMPARISON_OP2(ne, !=);  /* include ref comparison */
+      COMPARISON_OP(lt, <, lessThan, lessThanZero);
+      COMPARISON_OP(gt, >, greaterThan, greaterThanZero);
+      COMPARISON_OP(le, <=, lessEqual, lessEqualZero);
+      COMPARISON_OP(ge, >=, greaterEqual, greaterEqualZero);
+      COMPARISON_OP2(eq, ==, equal, equalZero);  /* include ref comparison */
+      COMPARISON_OP2(ne, !=, notEqual, notEqualZero);  /* include ref comparison */
       NULL_COMPARISON_OP(null);
       NULL_COMPARISON_NOT_OP(nonnull);
 
@@ -1599,29 +1871,50 @@ run:
       CASE(_fcmpl):
       CASE(_fcmpg):
       {
+	 if (IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -1) &&
+	     IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -2)) {
+          SET_STACK_OBLIVIOUS_INT(VMObliviousFloatCompare(topOfStack, _oblivStack, (opcode == Bytecodes::_fcmpl ? -1 : 1)), -2);
+         } else {
           SET_STACK_INT(VMfloatCompare(STACK_FLOAT(-2),
                                         STACK_FLOAT(-1),
                                         (opcode == Bytecodes::_fcmpl ? -1 : 1)),
                         -2);
+	 }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
       }
 
       CASE(_dcmpl):
       CASE(_dcmpg):
       {
+         if (IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack,-3) && 
+	     IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack,-1) ) {
+          int r = VMObliviousDoubleCompare(topOfStack, _oblivStack, (opcode == Bytecodes::_dcmpl ? -1 : 1));
+          MORE_STACK(-4); // Pop
+          SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(0));
+          SET_STACK_OBLIVIOUS_INT(r, 0);
+         } else {
           int r = VMdoubleCompare(STACK_DOUBLE(-3),
                                   STACK_DOUBLE(-1),
                                   (opcode == Bytecodes::_dcmpl ? -1 : 1));
           MORE_STACK(-4); // Pop
           SET_STACK_INT(r, 0);
+         }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
       }
 
       CASE(_lcmp):
       {
+         if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack,-3) &&
+             IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack,-1) ) {
+          int r = VMObliviousLongCompare(topOfStack, _oblivStack);
+          MORE_STACK(-4);
+	  SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(0));
+          SET_STACK_OBLIVIOUS_INT(r, 0);
+         } else {
           int r = VMlongCompare(STACK_LONG(-3), STACK_LONG(-1));
           MORE_STACK(-4);
           SET_STACK_INT(r, 0);
+	 }
           UPDATE_PC_AND_TOS_AND_CONTINUE(1, 1);
       }
 
@@ -1699,7 +1992,27 @@ run:
       CASE(_iaload):
           ARRAY_LOADTO32(T_INT, jint,   "%d",   STACK_INT, 0);
       CASE(_faload):
-          ARRAY_LOADTO32(T_FLOAT, jfloat, "%f",   STACK_FLOAT, 0);
+          //ARRAY_LOADTO32(T_FLOAT, jfloat, "%f",   STACK_FLOAT, 0);
+          {
+            arrayOop arrObj = (arrayOop)STACK_OBJECT(-2);
+            jint     index  = STACK_INT(-2 + 1);
+            char message[jintAsStringSize];
+            CHECK_NULL(arrObj);
+            if ((uint32_t)index >= (uint32_t)arrObj->length()) {
+                sprintf(message, "%d", index);
+                VM_JAVA_ERROR(vmSymbols::java_lang_ArrayIndexOutOfBoundsException(),
+                        message, note_rangeCheck_trap);
+            }
+            SET_STACK_FLOAT(*(jfloat *)(((address) arrObj->base(T_FLOAT)) + index * sizeof(jfloat)), -2);
+            if (arrObj->is_oblivious()) {
+                  // Pop the ofloat from the oblivstack
+                  GrowableArray<Obliv>* arrO = _oblivStack->pop().getOblivArray();
+                  Obliv of = arrO->at(index);
+                  _oblivStack->append(OblivContainer(of));
+                  SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-2));
+            }
+            UPDATE_PC_AND_TOS_AND_CONTINUE(1, -1);
+         }
       CASE(_aaload): {
           ARRAY_INTRO(-2);
           SET_STACK_OBJECT(((objArrayOop) arrObj)->obj_at(index), -2);
@@ -1984,10 +2297,15 @@ run:
           }
 #endif /* VM_JVMTI */
 
+          InstanceKlass* ik = istate->method()->method_holder();
+
           oop obj;
           if ((Bytecodes::Code)opcode == Bytecodes::_getstatic) {
             Klass* k = cache->f1_as_klass();
             obj = k->java_mirror();
+
+            ik = InstanceKlass::cast(k);
+
             MORE_STACK(1);  // Assume single slot push
           } else {
             obj = (oop) STACK_OBJECT(-1);
@@ -2006,43 +2324,279 @@ run:
             if (tos_type == atos) {
               VERIFY_OOP(obj->obj_field_acquire(field_offset));
               SET_STACK_OBJECT(obj->obj_field_acquire(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  OblivContainer oc = obj->oobj_field_acquire(field_offset);
+                  _oblivStack->append(oc);
+                }
+              }
             } else if (tos_type == itos) {
               SET_STACK_INT(obj->int_field_acquire(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->oint_field_acquire(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  unsigned int out = obj->int_field_acquire(field_offset);
+
+                  oint oop1 = feedOblivInt(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::INT);
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else if (tos_type == ltos) {
               SET_STACK_LONG(obj->long_field_acquire(field_offset), 0);
               MORE_STACK(1);
-            } else if (tos_type == btos || tos_type == ztos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->olong_field_acquire(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  unsigned long long out = obj->long_field_acquire(field_offset);
+
+                  olong oop1 = (olong)feedOblivLLong(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::LONG);
+                  _oblivStack->append(OblivContainer(newOblivVal));
+               }
+               SET_STACK_LONG_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
+            } else if (tos_type == btos) {
               SET_STACK_INT(obj->byte_field_acquire(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->obyte_field_acquire(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  jbyte out = obj->byte_field_acquire(field_offset);
+
+                  ochar oop1 = feedOblivChar(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
+            } else if (tos_type == ztos) {
+              SET_STACK_INT(obj->byte_field_acquire(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->obool_field_acquire(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  bool out = obj->byte_field_acquire(field_offset);
+
+                  oflag oop1 = feedOblivBool(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else if (tos_type == ctos) {
               SET_STACK_INT(obj->char_field_acquire(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->ochar_field_acquire(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  char out = obj->char_field_acquire(field_offset);
+
+                  ochar oop1 = feedOblivChar(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else if (tos_type == stos) {
               SET_STACK_INT(obj->short_field_acquire(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->oshort_field_acquire(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  short out = obj->short_field_acquire(field_offset);
+
+                  oshort oop1 = feedOblivShort(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else if (tos_type == ftos) {
               SET_STACK_FLOAT(obj->float_field_acquire(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->ofloat_field_acquire(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  unsigned int *pout, out;
+                  float *pin, in = (float)(obj->float_field_acquire(field_offset));
+                  pout = &out; pin = &in;
+                  memcpy(pout, pin, sizeof(*pout));
+
+                  ofloat32 oop1 = (ofloat32)feedOblivInt(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::FLOAT);
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else {
               SET_STACK_DOUBLE(obj->double_field_acquire(field_offset), 0);
               MORE_STACK(1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->odouble_field_acquire(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  unsigned long long *pout, out;
+                  double *pin, in = (double)(obj->double_field_acquire(field_offset));
+                  pout = &out; pin = &in;
+                  memcpy(pout, pin, sizeof(*pout));
+
+                  ofloat64 oop1 = (ofloat64)feedOblivLLong(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::DOUBLE);
+                  _oblivStack->append(OblivContainer(newOblivVal));
+               }
+               SET_STACK_DOUBLE_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             }
           } else {
             if (tos_type == atos) {
               VERIFY_OOP(obj->obj_field(field_offset));
               SET_STACK_OBJECT(obj->obj_field(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  OblivContainer oc = obj->oobj_field(field_offset);
+                  _oblivStack->append(oc);
+                }
+              }
             } else if (tos_type == itos) {
               SET_STACK_INT(obj->int_field(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->oint_field(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  unsigned int out = obj->int_field(field_offset);
+
+                  oint oop1 = feedOblivInt(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::INT);
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else if (tos_type == ltos) {
               SET_STACK_LONG(obj->long_field(field_offset), 0);
               MORE_STACK(1);
-            } else if (tos_type == btos || tos_type == ztos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->olong_field(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  unsigned long long out = obj->long_field(field_offset);
+
+                  olong oop1 = (olong)feedOblivLLong(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::LONG);
+                  _oblivStack->append(OblivContainer(newOblivVal));
+               }
+               SET_STACK_LONG_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
+            } else if (tos_type == btos) {
               SET_STACK_INT(obj->byte_field(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->obyte_field(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  jbyte out = obj->byte_field(field_offset);
+
+                  ochar oop1 = feedOblivChar(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
+            } else if (tos_type == ztos) {
+              SET_STACK_INT(obj->byte_field(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->obool_field(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  bool out = obj->byte_field(field_offset);
+
+                  oflag oop1 = feedOblivBool(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else if (tos_type == ctos) {
               SET_STACK_INT(obj->char_field(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->ochar_field(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  char out = obj->char_field(field_offset);
+
+                  ochar oop1 = feedOblivChar(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else if (tos_type == stos) {
               SET_STACK_INT(obj->short_field(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->oshort_field(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  short out = obj->short_field(field_offset);
+
+                  oshort oop1 = feedOblivShort(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else if (tos_type == ftos) {
               SET_STACK_FLOAT(obj->float_field(field_offset), -1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->ofloat_field(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  unsigned int *pout, out;
+                  float *pin, in = (float)(obj->float_field(field_offset));
+                  pout = &out; pin = &in;
+                  memcpy(pout, pin, sizeof(*pout));
+
+                  ofloat32 oop1 = (ofloat32)feedOblivInt(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::FLOAT);
+                  _oblivStack->append(OblivContainer(newOblivVal));
+                }
+                SET_STACK_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             } else {
               SET_STACK_DOUBLE(obj->double_field(field_offset), 0);
               MORE_STACK(1);
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (obj->is_obliv(field_offset)) {
+                  Obliv of = obj->odouble_field(field_offset);
+                  _oblivStack->append(OblivContainer(of));
+                } else {
+                  unsigned long long *pout, out;
+                  double *pin, in = (double)(obj->double_field(field_offset));
+                  pout = &out; pin = &in;
+                  memcpy(pout, pin, sizeof(*pout));
+
+                  ofloat64 oop1 = (ofloat64)feedOblivLLong(out, ik->field_obliv_party(cache->field_index()));
+                  Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::DOUBLE);
+                  _oblivStack->append(OblivContainer(newOblivVal));
+               }
+               SET_STACK_DOUBLE_OBLIVIOUS_POSITION(_oblivStack->length()-1, STACK_SLOT(-1));
+              }
             }
           }
 
@@ -2100,9 +2654,14 @@ run:
           if (tos_type == ltos || tos_type == dtos) {
             --count;
           }
+
+          InstanceKlass* ik = istate->method()->method_holder();
+
           if ((Bytecodes::Code)opcode == Bytecodes::_putstatic) {
             Klass* k = cache->f1_as_klass();
             obj = k->java_mirror();
+
+            ik = InstanceKlass::cast(k);
           } else {
             --count;
             obj = (oop) STACK_OBJECT(count);
@@ -2115,47 +2674,424 @@ run:
           int field_offset = cache->f2_as_index();
           if (cache->is_volatile()) {
             if (tos_type == itos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the oint from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the oint on the new lazy-store of oblivious values of the instanceKlass
+                  obj->release_oint_field_put(field_offset, of);
+                }
+              }
               obj->release_int_field_put(field_offset, STACK_INT(-1));
             } else if (tos_type == atos) {
               VERIFY_OOP(STACK_OBJECT(-1));
+              if (ik->field_is_oblivious(cache->field_index())) {
+                oop objStack = STACK_OBJECT(-1);
+                if (objStack->is_typeArray()) {
+                  if (!obj->is_obliv(field_offset)) {
+                    typeArrayOop ta = typeArrayOop(objStack);
+                    GrowableArray<Obliv>* arrF = new (ResourceObj::C_HEAP, mtInternal) GrowableArray<Obliv>(ta->length(), true);
+                    switch (TypeArrayKlass::cast(objStack->klass())->element_type()) {
+                      case T_BOOLEAN:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          bool out = (ta->bool_at(index));;
+                          oflag oop1 = (oflag)feedOblivBool(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_CHAR:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          char out = (ta->char_at(index));;
+                          ochar oop1 = (ochar)feedOblivChar(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_BYTE:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          jbyte out = (ta->byte_at(index));;
+                          ochar oop1 = (ochar)feedOblivChar(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_SHORT:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          jshort out = (ta->short_at(index));;
+                          oshort oop1 = (oshort)feedOblivShort(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_INT:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          unsigned int out = (ta->int_at(index));;
+                          oint oop1 = (oint)feedOblivInt(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::INT);
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_FLOAT:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          unsigned int *pout, out;
+                          float *pin, in = (float)(ta->float_at(index));
+                          pout = &out; pin = &in;
+                          memcpy(pout, pin, sizeof(*pout));
+                          ofloat32 oop1 = (ofloat32)feedOblivInt(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::FLOAT);
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_DOUBLE:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          unsigned long long *pout, out;
+                          double *pin, in = (double)(ta->double_at(index));
+                          pout = &out; pin = &in;
+                          memcpy(pout, pin, sizeof(*pout));
+                          ofloat64 oop1 = (ofloat64)feedOblivLLong(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::DOUBLE);
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_LONG:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          unsigned long long out = ta->long_at(index);
+                          olong oop1 = (olong)feedOblivLLong(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::LONG);
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                    }
+                    obj->release_oobj_field_put(field_offset, OblivContainer(arrF));
+                    obj->set_oblivious_party(ik->field_obliv_party(cache->field_index()));
+                  }
+                }
+              }
               obj->release_obj_field_put(field_offset, STACK_OBJECT(-1));
             } else if (tos_type == btos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the obyte from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the obyte on the new lazy-store of oblivious values of the instanceKlass
+                  obj->release_obyte_field_put(field_offset, of);
+                }
+              }
               obj->release_byte_field_put(field_offset, STACK_INT(-1));
             } else if (tos_type == ztos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the oflag from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the oflag on the new lazy-store of oblivious values of the instanceKlass
+                  of.set(convertIntToBool(&__obliv_c__trueCond, of.getInt()));
+                  obj->release_obool_field_put(field_offset, of);
+                }
+              }
               int bool_field = STACK_INT(-1);  // only store LSB
               obj->release_byte_field_put(field_offset, (bool_field & 1));
             } else if (tos_type == ltos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_LONG_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the olong from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the olong on the new lazy-store of oblivious values of the instanceKlass
+                  obj->release_olong_field_put(field_offset, of);
+                }
+              }
               obj->release_long_field_put(field_offset, STACK_LONG(-1));
             } else if (tos_type == ctos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the ochar from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the ochar on the new lazy-store of oblivious values of the instanceKlass
+                  obj->release_ochar_field_put(field_offset, of);
+                }
+              }
               obj->release_char_field_put(field_offset, STACK_INT(-1));
             } else if (tos_type == stos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the oshort from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the oshort on the new lazy-store of oblivious values of the instanceKlass
+                  obj->release_oshort_field_put(field_offset, of);
+                }
+              }
               obj->release_short_field_put(field_offset, STACK_INT(-1));
             } else if (tos_type == ftos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the ofloat from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the ofloat on the new lazy-store of oblivious values of the instanceKlass
+                  obj->release_ofloat_field_put(field_offset, of);
+                }
+              }
               obj->release_float_field_put(field_offset, STACK_FLOAT(-1));
             } else {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_DOUBLE_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the odouble from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the odouble on the new lazy-store of oblivious values of the instanceKlass
+                  obj->release_odouble_field_put(field_offset, of);
+                }
+              }
               obj->release_double_field_put(field_offset, STACK_DOUBLE(-1));
             }
             OrderAccess::storeload();
           } else {
             if (tos_type == itos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the oint from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the oint on the new lazy-store of oblivious values of the instanceKlass
+                  obj->oint_field_put(field_offset, of);
+                }
+              }
               obj->int_field_put(field_offset, STACK_INT(-1));
             } else if (tos_type == atos) {
               VERIFY_OOP(STACK_OBJECT(-1));
+              if (ik->field_is_oblivious(cache->field_index())) {
+                oop objStack = STACK_OBJECT(-1);
+                if (objStack->is_typeArray()) {
+                  if (!obj->is_obliv(field_offset)) {
+                    typeArrayOop ta = typeArrayOop(objStack);
+                    // convert to oblivious
+                    GrowableArray<Obliv>* arrF = new (ResourceObj::C_HEAP, mtInternal) GrowableArray<Obliv>(ta->length(), true);
+                    switch (TypeArrayKlass::cast(objStack->klass())->element_type()) {
+                      case T_BOOLEAN:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          bool out = (ta->bool_at(index));;
+                          oflag oop1 = (oflag)feedOblivBool(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_CHAR:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          char out = (ta->char_at(index));;
+                          ochar oop1 = (ochar)feedOblivChar(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_BYTE:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          jbyte out = (ta->byte_at(index));;
+                          ochar oop1 = (ochar)feedOblivChar(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_SHORT:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          jshort out = (ta->short_at(index));;
+                          oshort oop1 = (oshort)feedOblivShort(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()));
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_INT:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          unsigned int out = (ta->int_at(index));;
+                          oint oop1 = (oint)feedOblivInt(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::INT);
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_FLOAT:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          unsigned int *pout, out;
+                          float *pin, in = (float)(ta->float_at(index));
+                          pout = &out; pin = &in;
+                          memcpy(pout, pin, sizeof(*pout));
+                          ofloat32 oop1 = (ofloat32)feedOblivInt(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::FLOAT);
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_DOUBLE:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          unsigned long long *pout, out;
+                          double *pin, in = (double)(ta->double_at(index));
+                          pout = &out; pin = &in;
+                          memcpy(pout, pin, sizeof(*pout));
+                          ofloat64 oop1 = (ofloat64)feedOblivLLong(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::DOUBLE);
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                      case T_LONG:
+                      {
+                        for(int index = 0; index < ta->length(); index++) {
+                          unsigned long long out = ta->long_at(index);
+                          olong oop1 = (olong)feedOblivLLong(out, ik->field_obliv_party(cache->field_index()));
+                          Obliv newOblivVal(oop1, ik->field_obliv_party(cache->field_index()), Obliv::LONG);
+                          arrF->at_put_grow(index, newOblivVal);
+                        }
+                      }
+                      break;
+                    }
+                    obj->oobj_field_put(field_offset, OblivContainer(arrF));
+                    obj->set_oblivious_party(ik->field_obliv_party(cache->field_index()));
+                  }
+                }
+              }
               obj->obj_field_put(field_offset, STACK_OBJECT(-1));
             } else if (tos_type == btos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the obyte from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the obyte on the new lazy-store of oblivious values of the instanceKlass
+                  obj->obyte_field_put(field_offset, of);
+                }
+              }
               obj->byte_field_put(field_offset, STACK_INT(-1));
             } else if (tos_type == ztos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the oflag from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the oflag on the new lazy-store of oblivious values of the instanceKlass
+		  of.set(convertIntToBool(&__obliv_c__trueCond, of.getInt()));
+                  obj->obool_field_put(field_offset, of);
+                }
+              }
               int bool_field = STACK_INT(-1);  // only store LSB
               obj->byte_field_put(field_offset, (bool_field & 1));
             } else if (tos_type == ltos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_LONG_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_LONG_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the olong from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the olong on the new lazy-store of oblivious values of the instanceKlass
+                  obj->olong_field_put(field_offset, of);
+                }
+              }
               obj->long_field_put(field_offset, STACK_LONG(-1));
             } else if (tos_type == ctos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the ochar from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the ochar on the new lazy-store of oblivious values of the instanceKlass
+                  obj->ochar_field_put(field_offset, of);
+                }
+              }
               obj->char_field_put(field_offset, STACK_INT(-1));
             } else if (tos_type == stos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_INT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the oshort from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the oshort on the new lazy-store of oblivious values of the instanceKlass
+                  obj->oshort_field_put(field_offset, of);
+                }
+              }
               obj->short_field_put(field_offset, STACK_INT(-1));
             } else if (tos_type == ftos) {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_FLOAT_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the ofloat from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the ofloat on the new lazy-store of oblivious values of the instanceKlass
+                  obj->ofloat_field_put(field_offset, of);
+                }
+              }
               obj->float_field_put(field_offset, STACK_FLOAT(-1));
             } else {
+              if (ik->field_is_oblivious(cache->field_index())) {
+                if (IS_STACK_DOUBLE_OBLIVIOUS(topOfStack, _oblivStack, -1)) {
+                  // clear the stack oblivious-ness
+                  SET_STACK_DOUBLE_OBLIVIOUS_POSITION(-1, STACK_SLOT(-1));
+                  // Pop the odouble from the oblivstack
+                  Obliv of = _oblivStack->pop().getObliv();
+                  of.setParty(ik->field_obliv_party(cache->field_index()));
+                  // store the odouble on the new lazy-store of oblivious values of the instanceKlass
+                  obj->odouble_field_put(field_offset, of);
+                }
+              }
               obj->double_field_put(field_offset, STACK_DOUBLE(-1));
             }
           }

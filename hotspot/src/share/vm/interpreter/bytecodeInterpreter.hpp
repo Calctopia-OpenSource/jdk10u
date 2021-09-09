@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2002, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -34,11 +35,17 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/macros.hpp"
 
+#include <obliv.h>
+#include <oblivoh.h>
+#include "utilities/growableArray.hpp"
+#include "utilities/obliv.hpp"
+
 #ifdef CC_INTERP
 
 // JavaStack Implementation
 #define MORE_STACK(count)  \
-    (topOfStack -= ((count) * Interpreter::stackElementWords))
+  (topOfStack -= ((count) * Interpreter::stackElementWords)); 
+
 
 // CVM definitions find hotspot equivalents...
 
@@ -233,6 +240,23 @@ static jlong VMlongXor(jlong op1, jlong op2);
 static jlong VMlongRem(jlong op1, jlong op2);
 
 /*
+ * Oblivious 64-bit Arithmetic:
+ *
+ * The functions below follow the semantics of the
+ * ladd, land, ldiv, lmul, lor, lxor, and lrem bytecodes,
+ * respectively.
+ */
+
+static jlong VMObliviousLongAdd(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongAnd(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongDiv(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongMul(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongOr (intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongSub(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongXor(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongRem(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Shift:
  *
  * The functions below follow the semantics of the
@@ -244,6 +268,17 @@ static jlong VMlongShl (jlong op1, jint op2);
 static jlong VMlongShr (jlong op1, jint op2);
 
 /*
+ * Shift:
+ *
+ * The functions below follow the semantics of the
+ * lushr, lshl, and lshr bytecodes, respectively.
+ */
+
+static jlong VMObliviousLongUshr(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongShl (intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jlong VMObliviousLongShr (intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Unary:
  *
  * Return the negation of "op" (-op), according to
@@ -253,10 +288,25 @@ static jlong VMlongShr (jlong op1, jint op2);
 static jlong VMlongNeg(jlong op);
 
 /*
+ * Oblivious Unary:
+ *
+ * Return the negation of "op" (-op), according to
+ * the semantics of the lneg bytecode.
+ */
+
+static jlong VMObliviousLongNeg(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Return the complement of "op" (~op)
  */
 
 static jlong VMlongNot(jlong op);
+
+/*
+ * Return the oblivious complement of "op" (~op)
+ */
+
+static jlong VMObliviousLongNot(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 
 /*
@@ -266,6 +316,14 @@ static jlong VMlongNot(jlong op);
 static int32_t VMlongLtz(jlong op);     /* op <= 0 */
 static int32_t VMlongGez(jlong op);     /* op >= 0 */
 static int32_t VMlongEqz(jlong op);     /* op == 0 */
+
+/*
+ * Oblivious Comparisons to 0:
+ */
+
+static int32_t VMObliviousLongLtz(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);     /* op <= 0 */
+static int32_t VMObliviousLongGez(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);     /* op >= 0 */
+static int32_t VMObliviousLongEqz(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);     /* op == 0 */
 
 /*
  * Between operands:
@@ -279,6 +337,17 @@ static int32_t VMlongLt(jlong op1, jlong op2);    /* op1 <  op2 */
 static int32_t VMlongGt(jlong op1, jlong op2);    /* op1 >  op2 */
 
 /*
+ * Oblivious Between operands:
+ */
+
+static int32_t VMObliviousLongEq(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);    /* op1 == op2 */
+static int32_t VMObliviousLongNe(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);    /* op1 != op2 */
+static int32_t VMObliviousLongGe(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);    /* op1 >= op2 */
+static int32_t VMObliviousLongLe(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);    /* op1 <= op2 */
+static int32_t VMObliviousLongLt(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);    /* op1 <  op2 */
+static int32_t VMObliviousLongGt(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);    /* op1 >  op2 */
+
+/*
  * Comparisons (returning an jint value: 0, 1, or -1)
  *
  * Between operands:
@@ -290,9 +359,25 @@ static int32_t VMlongGt(jlong op1, jlong op2);    /* op1 >  op2 */
 static int32_t VMlongCompare(jlong op1, jlong op2);
 
 /*
+ * Oblivous Comparisons (returning an jint value: 0, 1, or -1)
+ *
+ * Between operands:
+ *
+ * Compare "op1" and "op2" according to the semantics of the
+ * "lcmp" bytecode.
+ */
+
+static int32_t VMObliviousLongCompare(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Convert int to long, according to "i2l" bytecode semantics
  */
 static jlong VMint2Long(jint val);
+
+/*
+ * Convert oblivious int to oblivious long, according to "i2l" bytecode semantics
+ */
+static jlong VMObliviousInt2Long(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*
  * Convert long to int, according to "l2i" bytecode semantics
@@ -300,14 +385,29 @@ static jlong VMint2Long(jint val);
 static jint VMlong2Int(jlong val);
 
 /*
+ * Convert oblivious long to oblivious int, according to "l2i" bytecode semantics
+ */
+static jint VMObliviousLong2Int(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Convert long to float, according to "l2f" bytecode semantics
  */
 static jfloat VMlong2Float(jlong val);
 
 /*
+ * Convert oblivious long to oblivious float, according to "l2f" bytecode semantics
+ */
+static jfloat VMObliviousLong2Float(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Convert long to double, according to "l2d" bytecode semantics
  */
 static jdouble VMlong2Double(jlong val);
+
+/*
+ * Convert oblivious long to oblivious double, according to "l2d" bytecode semantics
+ */
+static jdouble VMObliviousLong2Double(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*
  * Java floating-point float value manipulation.
@@ -328,6 +428,24 @@ static jfloat VMfloatDiv(jfloat op1, jfloat op2);
 static jfloat VMfloatRem(jfloat op1, jfloat op2);
 
 /*
+ * Oblivious floating-point float value manipulation.
+ *
+ * The result argument is, once again, an lvalue.
+ *
+ * Arithmetic:
+ *
+ * The functions below follow the semantics of the
+ * fadd, fsub, fmul, fdiv, and frem bytecodes,
+ * respectively.
+ */
+
+static jfloat VMObliviousFloatAdd(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jfloat VMObliviousFloatSub(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jfloat VMObliviousFloatMul(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jfloat VMObliviousFloatDiv(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jfloat VMObliviousFloatRem(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Unary:
  *
  * Return the negation of "op" (-op), according to
@@ -335,6 +453,15 @@ static jfloat VMfloatRem(jfloat op1, jfloat op2);
  */
 
 static jfloat VMfloatNeg(jfloat op);
+
+/*
+ * Oblivious Unary:
+ *
+ * Return the negation of "op" (-op), according to
+ * the semantics of the fneg bytecode.
+ */
+
+static jfloat VMObliviousFloatNeg(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*
  * Comparisons (returning an int value: 0, 1, or -1)
@@ -347,6 +474,18 @@ static jfloat VMfloatNeg(jfloat op);
 
 static int32_t VMfloatCompare(jfloat op1, jfloat op2,
                               int32_t direction);
+
+/*
+ * Oblivious Comparisons (returning an int value: 0, 1, or -1)
+ *
+ * Between operands:
+ *
+ * Compare "op1" and "op2" according to the semantics of the
+ * "fcmpl" (direction is -1) or "fcmpg" (direction is 1) bytecodes.
+ */
+
+static int32_t VMObliviousFloatCompare(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack,
+		                              int32_t direction);
 /*
  * Conversion:
  */
@@ -356,6 +495,24 @@ static int32_t VMfloatCompare(jfloat op1, jfloat op2,
  */
 
 static jdouble VMfloat2Double(jfloat op);
+
+/*
+ * Convert oblivious float to oblivious double, according to "f2d" bytecode semantics
+ */
+
+static jdouble VMObliviousFloat2Double(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
+ * Convert oblivious float to oblivious int, according to "f2i" bytecode semantics
+ */
+
+static jint VMObliviousFloat2Int(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
+ * Convert oblivious float to oblivious long, according to "f2l" bytecode semantics
+ */
+
+static jlong VMObliviousFloat2Long(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*
  ******************************************
@@ -374,16 +531,40 @@ static jdouble VMfloat2Double(jfloat op);
 static jint VMdouble2Int(jdouble val);
 
 /*
+ * Convert oblivious double to oblivious int, according to "d2i" bytecode semantics
+ */
+
+static jint VMObliviousDouble2Int(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
+ * Convert oblivious double to oblivious long, according to "d2l" bytecode semantics
+ */
+
+static jlong VMObliviousDouble2Long(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Convert double to float, according to "d2f" bytecode semantics
  */
 
 static jfloat VMdouble2Float(jdouble val);
 
 /*
+ * Convert oblivious double to oblivious float, according to "d2f" bytecode semantics
+ */
+
+static jfloat VMObliviousDouble2Float(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Convert int to double, according to "i2d" bytecode semantics
  */
 
 static jdouble VMint2Double(jint val);
+
+/*
+ * Convert oblivious int to oblivious double, according to "i2d" bytecode semantics
+ */
+
+static jdouble VMObliviousInt2Double(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*
  * Arithmetic:
@@ -399,6 +580,19 @@ static jdouble VMdoubleMul(jdouble op1, jdouble op2);
 static jdouble VMdoubleRem(jdouble op1, jdouble op2);
 
 /*
+ * Olivious Arithmetic:
+ *
+ * The functions below follow the semantics of the
+ * dadd, dsub, ddiv, dmul, and drem bytecodes, respectively.
+ */
+
+static jdouble VMObliviousDoubleAdd(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jdouble VMObliviousDoubleSub(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jdouble VMObliviousDoubleDiv(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jdouble VMObliviousDoubleMul(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jdouble VMObliviousDoubleRem(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Unary:
  *
  * Return the negation of "op" (-op), according to
@@ -406,6 +600,15 @@ static jdouble VMdoubleRem(jdouble op1, jdouble op2);
  */
 
 static jdouble VMdoubleNeg(jdouble op);
+
+/*
+ * Oblivious Unary:
+ *
+ * Return the oblivious negation of "op" (-op), according to
+ * the semantics of the dneg bytecode.
+ */
+
+static jdouble VMObliviousDoubleNeg(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*
  * Comparisons (returning an int32_t value: 0, 1, or -1)
@@ -417,6 +620,17 @@ static jdouble VMdoubleNeg(jdouble op);
  */
 
 static int32_t VMdoubleCompare(jdouble op1, jdouble op2, int32_t direction);
+
+/*
+ * Oblivious Comparisons (returning an int32_t value: 0, 1, or -1)
+ *
+ * Between operands:
+ *
+ * Compare "op1" and "op2" according to the semantics of the
+ * "dcmpl" (direction is -1) or "dcmpg" (direction is 1) bytecodes.
+ */
+
+static int32_t VMObliviousDoubleCompare(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack, int32_t direction);
 
 /*
  * Copy two typeless 32-bit words from one location to another.
@@ -450,6 +664,24 @@ static jint VMintAnd(jint op1, jint op2);
 static jint VMintOr (jint op1, jint op2);
 static jint VMintXor(jint op1, jint op2);
 
+// Oblivious arithmetic operations
+
+/*
+ * Java arithmetic methods.
+ * The functions below follow the semantics of the
+ * iadd, isub, imul, idiv, irem, iand, ior, ixor,
+ * and ineg bytecodes, respectively.
+ */
+
+static jint VMObliviousIntAdd(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint VMObliviousIntSub(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint VMObliviousIntMul(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint VMObliviousIntDiv(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint VMObliviousIntRem(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint VMObliviousIntAnd(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint VMObliviousIntOr (intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint VMObliviousIntXor(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
 /*
  * Shift Operation:
  * The functions below follow the semantics of the
@@ -461,6 +693,16 @@ static jint VMintShl (jint op, jint num);
 static jint VMintShr (jint op, jint num);
 
 /*
+ * Oblivious Shift Operation:
+ * The functions below follow the semantics of the
+ * iushr, ishl, and ishr bytecodes, respectively.
+ */
+
+static juint VMObliviousIntUshr(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint  VMObliviousIntShl  (intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+static jint  VMObliviousIntShr (intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Unary Operation:
  *
  * Return the negation of "op" (-op), according to
@@ -468,6 +710,15 @@ static jint VMintShr (jint op, jint num);
  */
 
 static jint VMintNeg(jint op);
+
+/*
+ * Oblivious Unary Operation:
+ *
+ * Return the negation of "op" (-op), according to
+ * the semantics of the ineg bytecode.
+ */
+
+static jint VMObliviousIntNeg(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*
  * Int Conversions:
@@ -480,10 +731,22 @@ static jint VMintNeg(jint op);
 static jfloat VMint2Float(jint val);
 
 /*
+ * Convert oblivious int to oblivious float, according to "i2f" bytecode semantics
+ */
+
+static jfloat VMObliviousInt2Float(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Convert int to byte, according to "i2b" bytecode semantics
  */
 
 static jbyte VMint2Byte(jint val);
+
+/*
+ * Convert oblivious int to oblivious byte, according to "i2b" bytecode semantics
+ */
+
+static jbyte VMObliviousInt2Byte(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*
  * Convert int to char, according to "i2c" bytecode semantics
@@ -492,10 +755,22 @@ static jbyte VMint2Byte(jint val);
 static jchar VMint2Char(jint val);
 
 /*
+ * Convert oblivious int to oblivious char, according to "i2c" bytecode semantics
+ */
+
+static jchar VMObliviousInt2Char(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
+
+/*
  * Convert int to short, according to "i2s" bytecode semantics
  */
 
 static jshort VMint2Short(jint val);
+
+/*
+ * Convert obliious int to oblivious short, according to "i2s" bytecode semantics
+ */
+
+static jshort VMObliviousInt2Short(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack);
 
 /*=========================================================================
  * Bytecode interpreter operations

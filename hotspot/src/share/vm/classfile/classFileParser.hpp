@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -95,6 +96,8 @@ class ClassFileParser VALUE_OBJ_CLASS_SPEC {
   const InstanceKlass* _super_klass;
   ConstantPool* _cp;
   Array<u2>* _fields;
+  Array<bool>* _oblivs;
+  Array<int>* _oblivsParties;
   Array<Method*>* _methods;
   Array<u2>* _inner_classes;
   Array<Klass*>* _local_interfaces;

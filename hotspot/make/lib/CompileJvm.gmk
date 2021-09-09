@@ -1,4 +1,5 @@
 #
+# Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
 # Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
@@ -58,6 +59,7 @@ JVM_CFLAGS_INCLUDES += \
     -I$(JVM_VARIANT_OUTPUTDIR)/gensrc \
     -I$(HOTSPOT_TOPDIR)/src/share/vm/precompiled \
     -I$(HOTSPOT_TOPDIR)/src/share/vm/prims \
+    -I$(SRC_ROOT)/obliv-c-headers \
     #
 
 # INCLUDE_SUFFIX_* is only meant for including the proper
@@ -104,10 +106,12 @@ JVM_LDFLAGS += \
     $(SHARED_LIBRARY_FLAGS) \
     $(JVM_LDFLAGS_FEATURES) \
     $(EXTRA_LDFLAGS) \
+    $(EXTRA_LDFLAGS) -L$(SRC_ROOT)/obliv-c/_build/ -lobliv \
     #
 
 JVM_LIBS += \
     $(JVM_LIBS_FEATURES) \
+    $(JVM_LIBS_FEATURES) -L$(SRC_ROOT)/obliv-c/_build/ -lobliv \
     #
 
 # These files and directories are always excluded

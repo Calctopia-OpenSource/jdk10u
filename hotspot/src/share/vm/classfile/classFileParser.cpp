@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -999,14 +1000,16 @@ public:
     _jdk_internal_vm_annotation_Contended,
     _field_Stable,
     _jdk_internal_vm_annotation_ReservedStackAccess,
+    _field_Oblivious,
     _annotation_LIMIT
   };
   const Location _location;
   int _annotations_present;
+  int _obliv_party;
   u2 _contended_group;
 
   AnnotationCollector(Location location)
-    : _location(location), _annotations_present(0)
+    : _location(location), _annotations_present(0), _obliv_party(-1)
   {
     assert((int)_annotation_LIMIT <= (int)sizeof(_annotations_present) * BitsPerByte, "");
   }
@@ -1034,6 +1037,12 @@ public:
 
   void set_stable(bool stable) { set_annotation(_field_Stable); }
   bool is_stable() const { return has_annotation(_field_Stable); }
+
+  void set_oblivious(bool oblivious) { if(oblivious) set_annotation(_field_Oblivious); }
+  bool is_oblivious() const { return has_annotation(_field_Oblivious); }
+
+  void set_obliv_party(int party) { _obliv_party = party; }
+  int  get_obliv_party() const { return _obliv_party; }
 };
 
 // This class also doubles as a holder for metadata cleanup.
@@ -1168,6 +1177,7 @@ static void parse_annotations(const ConstantPool* const cp,
     c_con_off = 7,    // utf8 payload, such as 'I'
     c_size = 9,       // end of 'c' annotation
     s_tag_val = 's',    // payload is String
+    s_tag_int_val = 'I', // payload is Integer
     s_con_off = 7,    // utf8 payload, such as 'Ljava/lang/String;'
     s_size = 9,
     min_size = 6        // smallest possible size (zero members)
@@ -1216,6 +1226,17 @@ static void parse_annotations(const ConstantPool* const cp,
         }
       }
       coll->set_contended_group(group_index);
+    }
+
+    if(AnnotationCollector::_field_Oblivious == id) {
+      int party = -1;
+      if (count == 1
+        && s_tag_int_val == *(abase + tag_off)
+        && member == vmSymbols::value_name()) {
+        int partyIndex = Bytes::get_Java_u2((address)abase + s_con_off);
+        party = ((ConstantPool*)cp)->int_at(partyIndex);
+      }
+      coll->set_obliv_party(party);
     }
   }
 }
@@ -1482,6 +1503,8 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
   assert(java_fields_count_ptr != NULL, "invariant");
 
   assert(NULL == _fields, "invariant");
+  assert(NULL == _oblivs, "invariant");
+  assert(NULL == _oblivsParties, "invariants");
   assert(NULL == _fields_annotations, "invariant");
   assert(NULL == _fields_type_annotations, "invariant");
 
@@ -1518,6 +1541,17 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
   u2* const fa = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD,
                                               u2,
                                               total_fields * (FieldInfo::field_slots + 1));
+  bool* oblivs = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD,
+                                              bool,
+                                              total_fields * (FieldInfo::field_slots + 1));
+  int*  oblivsParties = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD,
+                                                     int,
+                                                     total_fields * (FieldInfo::field_slots + 1));
+
+  // initialize all fields as non-oblivious
+  for (int i = 0; i < total_fields * (FieldInfo::field_slots + 1); i++) {
+    oblivs[i] = false;
+  }
 
   // The generic signature slots start after all other fields' data.
   int generic_signature_slot = total_fields * FieldInfo::field_slots;
@@ -1570,8 +1604,19 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
                                              CHECK);
         }
         _fields_annotations->at_put(n, parsed_annotations.field_annotations());
+        if (parsed_annotations.is_oblivious()) {
+          oblivs[n] = true;
+          oblivsParties[n] = parsed_annotations.get_obliv_party();
+        } else {
+          oblivs[n] = false;
+          oblivsParties[n] = -1;
+        }
         parsed_annotations.set_field_annotations(NULL);
+      } else {
+        oblivs[n] = false;
+        oblivsParties[n] = -1;
       }
+
       if (parsed_annotations.field_type_annotations() != NULL) {
         if (_fields_type_annotations == NULL) {
           _fields_type_annotations =
@@ -1593,6 +1638,9 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
         generic_signature_slot ++;
         num_generic_signature ++;
       }
+    } else {
+      oblivs[n] = false;
+      oblivsParties[n] = -1;
     }
 
     FieldInfo* const field = FieldInfo::from_field_array(fa, n);
@@ -1651,11 +1699,21 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
   }
 
   assert(NULL == _fields, "invariant");
+  assert(NULL == _oblivs, "invariant");
+  assert(NULL == _oblivsParties, "invariant");
 
   _fields =
     MetadataFactory::new_array<u2>(_loader_data,
                                    index * FieldInfo::field_slots + num_generic_signature,
                                    CHECK);
+  _oblivs =
+    MetadataFactory::new_array<bool>(_loader_data,
+                                     index * FieldInfo::field_slots + num_generic_signature,
+                                     CHECK);
+  _oblivsParties =
+    MetadataFactory::new_array<int>(_loader_data,
+                                     index * FieldInfo::field_slots + num_generic_signature,
+                                     CHECK);
   // Sometimes injected fields already exist in the Java source so
   // the fields array could be too long.  In that case the
   // fields array is trimed. Also unused slots that were reserved
@@ -1664,12 +1722,19 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
     int i = 0;
     for (; i < index * FieldInfo::field_slots; i++) {
       _fields->at_put(i, fa[i]);
+      _oblivs->at_put(i, oblivs[i]);
+      _oblivsParties->at_put(i, oblivsParties[i]);
     }
     for (int j = total_fields * FieldInfo::field_slots;
          j < generic_signature_slot; j++) {
-      _fields->at_put(i++, fa[j]);
+      _fields->at_put(i, fa[j]);
+      _oblivs->at_put(i, oblivs[j]);
+      _oblivsParties->at_put(i, oblivsParties[j]);
+      i++;
     }
     assert(_fields->length() == i, "");
+    assert(_oblivs->length() == i, "");
+    assert(_oblivsParties->length() == i, "");
   }
 
   if (_need_verify && length > 1) {
@@ -2060,6 +2125,10 @@ AnnotationCollector::annotation_index(const ClassLoaderData* loader_data,
       if (_location != _in_field)   break;  // only allow for fields
       if (!privileged)              break;  // only allow in privileged code
       return _field_Stable;
+    }
+    case vmSymbols::VM_SYMBOL_ENUM_NAME(java_security_Obliv_signature): {
+      if (_location != _in_field)   break;  // only allow for field
+      return _field_Oblivious;
     }
     case vmSymbols::VM_SYMBOL_ENUM_NAME(jdk_internal_vm_annotation_Contended_signature): {
       if (_location != _in_field && _location != _in_class) {
@@ -3524,6 +3593,8 @@ void ClassFileParser::apply_parsed_class_metadata(
   _cp->set_pool_holder(this_klass);
   this_klass->set_constants(_cp);
   this_klass->set_fields(_fields, java_fields_count);
+  this_klass->set_oblivs(_oblivs);
+  this_klass->set_oblivsParties(_oblivsParties);
   this_klass->set_methods(_methods);
   this_klass->set_inner_classes(_inner_classes);
   this_klass->set_local_interfaces(_local_interfaces);
@@ -5336,6 +5407,8 @@ void ClassFileParser::fill_instance_klass(InstanceKlass* ik, bool changed_by_loa
   // note that is not safe to use the fields in the parser from this point on
   assert(NULL == _cp, "invariant");
   assert(NULL == _fields, "invariant");
+  assert(NULL == _oblivs, "invariant");
+  assert(NULL == _oblivsParties, "invariant");
   assert(NULL == _methods, "invariant");
   assert(NULL == _inner_classes, "invariant");
   assert(NULL == _local_interfaces, "invariant");
@@ -5597,6 +5670,8 @@ ClassFileParser::ClassFileParser(ClassFileStream* stream,
   _super_klass(),
   _cp(NULL),
   _fields(NULL),
+  _oblivs(NULL),
+  _oblivsParties(NULL),
   _methods(NULL),
   _inner_classes(NULL),
   _local_interfaces(NULL),
@@ -5701,6 +5776,8 @@ void ClassFileParser::clear_class_metadata() {
   // deallocated if classfile parsing returns an error.
   _cp = NULL;
   _fields = NULL;
+  _oblivs = NULL;
+  _oblivsParties = NULL;
   _methods = NULL;
   _inner_classes = NULL;
   _local_interfaces = NULL;
@@ -5717,6 +5794,12 @@ ClassFileParser::~ClassFileParser() {
   }
   if (_fields != NULL) {
     MetadataFactory::free_array<u2>(_loader_data, _fields);
+  }
+  if (_oblivs != NULL) {
+    MetadataFactory::free_array<bool>(_loader_data, _oblivs);
+  }
+  if (_oblivsParties != NULL) {
+    MetadataFactory::free_array<int>(_loader_data, _oblivsParties);
   }
 
   if (_methods != NULL) {
@@ -5977,6 +6060,8 @@ void ClassFileParser::parse_stream(const ClassFileStream* const stream,
                CHECK);
 
   assert(_fields != NULL, "invariant");
+  assert(_oblivs != NULL, "invariant");
+  assert(_oblivsParties != NULL, "invariant");
 
   // Methods
   AccessFlags promoted_flags;

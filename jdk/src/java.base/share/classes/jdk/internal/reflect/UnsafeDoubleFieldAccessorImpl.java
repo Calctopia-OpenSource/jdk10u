@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2001, 2005, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -26,6 +27,7 @@
 package jdk.internal.reflect;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
     UnsafeDoubleFieldAccessorImpl(Field field) {
@@ -40,7 +42,15 @@ class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throw newGetBooleanIllegalArgumentException();
     }
 
+    public boolean revealOblivBoolean(Object obj) throws IllegalArgumentException {
+        throw newGetBooleanIllegalArgumentException();
+    }
+
     public byte getByte(Object obj) throws IllegalArgumentException {
+        throw newGetByteIllegalArgumentException();
+    }
+
+    public byte revealOblivByte(Object obj) throws IllegalArgumentException {
         throw newGetByteIllegalArgumentException();
     }
 
@@ -48,7 +58,15 @@ class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throw newGetCharIllegalArgumentException();
     }
 
+    public char revealOblivChar(Object obj) throws IllegalArgumentException {
+        throw newGetCharIllegalArgumentException();
+    }
+
     public short getShort(Object obj) throws IllegalArgumentException {
+        throw newGetShortIllegalArgumentException();
+    }
+
+    public short revealOblivShort(Object obj) throws IllegalArgumentException {
         throw newGetShortIllegalArgumentException();
     }
 
@@ -56,7 +74,15 @@ class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throw newGetIntIllegalArgumentException();
     }
 
+    public int revealOblivInt(Object obj) throws IllegalArgumentException {
+        throw newGetIntIllegalArgumentException();
+    }
+
     public long getLong(Object obj) throws IllegalArgumentException {
+        throw newGetLongIllegalArgumentException();
+    }
+
+    public long revealOblivLong(Object obj) throws IllegalArgumentException {
         throw newGetLongIllegalArgumentException();
     }
 
@@ -64,9 +90,18 @@ class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throw newGetFloatIllegalArgumentException();
     }
 
+    public float revealOblivFloat(Object obj) throws IllegalArgumentException {
+        throw newGetFloatIllegalArgumentException();
+    }
+
     public double getDouble(Object obj) throws IllegalArgumentException {
         ensureObj(obj);
         return unsafe.getDouble(obj, fieldOffset);
+    }
+
+    public double revealOblivDouble(Object obj) throws IllegalArgumentException {
+        ensureObj(obj);
+        return unsafe.revealOblivDouble(obj, fieldOffset);
     }
 
     public void set(Object obj, Object value)
@@ -116,10 +151,22 @@ class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         throwSetIllegalArgumentException(z);
     }
 
+    public void condAssignBoolean(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setByte(Object obj, byte b)
         throws IllegalArgumentException, IllegalAccessException
     {
         setDouble(obj, b);
+    }
+
+    public void condAssignByte(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setChar(Object obj, char c)
@@ -128,10 +175,22 @@ class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         setDouble(obj, c);
     }
 
+    public void condAssignChar(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setShort(Object obj, short s)
         throws IllegalArgumentException, IllegalAccessException
     {
         setDouble(obj, s);
+    }
+
+    public void condAssignShort(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setInt(Object obj, int i)
@@ -140,16 +199,34 @@ class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
         setDouble(obj, i);
     }
 
+    public void condAssignInt(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setLong(Object obj, long l)
         throws IllegalArgumentException, IllegalAccessException
     {
         setDouble(obj, l);
     }
 
+    public void condAssignLong(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
+    }
+
     public void setFloat(Object obj, float f)
         throws IllegalArgumentException, IllegalAccessException
     {
         setDouble(obj, f);
+    }
+
+    public void condAssignFloat(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        throwSetIllegalArgumentException(of);
     }
 
     public void setDouble(Object obj, double d)
@@ -160,5 +237,24 @@ class UnsafeDoubleFieldAccessorImpl extends UnsafeFieldAccessorImpl {
             throwFinalFieldIllegalAccessException(d);
         }
         unsafe.putDouble(obj, fieldOffset, d);
+    }
+
+    public void condAssignDouble(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        ensureObj(obj);
+        if (isFinal) {
+            throwFinalFieldIllegalAccessException(of);
+        }
+        long fieldOffsetCond, fieldOffsetDouble;
+        if (Modifier.isStatic(cond.getModifiers()))
+            fieldOffsetCond = unsafe.staticFieldOffset(cond);
+        else
+            fieldOffsetCond = unsafe.objectFieldOffset(cond);
+        if (Modifier.isStatic(of.getModifiers()))
+            fieldOffsetDouble = unsafe.staticFieldOffset(of);
+        else
+            fieldOffsetDouble = unsafe.objectFieldOffset(of);
+        unsafe.condAssignDouble(obj, fieldOffset, fieldOffsetCond, fieldOffsetDouble);
     }
 }

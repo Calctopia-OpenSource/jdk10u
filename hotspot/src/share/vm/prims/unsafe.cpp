@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2000, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -48,6 +49,10 @@
 #if INCLUDE_ALL_GCS
 #include "gc/g1/g1SATBCardTableModRefBS.hpp"
 #endif // INCLUDE_ALL_GCS
+
+#include <obliv.h>
+#include <oblivoh.h>
+#include "utilities/growableArray.hpp"
 
 /**
  * Implementation of the jdk.internal.misc.Unsafe class
@@ -453,6 +458,277 @@ DEFINE_GETSETOOP(jlong, Long);
 DEFINE_GETSETOOP(jfloat, Float);
 DEFINE_GETSETOOP(jdouble, Double);
 
+ProtocolDesc pd;
+
+static void Unsafe_InitSecureComputation_impl(JNIEnv *env, jstring party, jstring port, jstring destIP) {
+		char bufParty[128];
+		char bufPort[128];
+		char bufDestIP[128];
+
+		if (party != NULL && port != NULL && destIP != NULL) {
+			env->GetStringUTFRegion(party, 0, env->GetStringLength(party), bufParty);
+			env->GetStringUTFRegion(port, 0, env->GetStringLength(port), bufPort);
+			env->GetStringUTFRegion(destIP, 0, env->GetStringLength(destIP), bufDestIP);
+
+		        int partyId = atoi(bufParty);
+        		if (partyId == 1)
+		        { // server/garbler
+		          protocolAcceptTcp2P(&pd, bufPort);
+		        } else {
+		          protocolConnectTcp2P(&pd, bufDestIP, bufPort);
+		        }
+		        setCurrentParty(&pd, partyId);
+		        execYaoProtocol_Init(&pd, NULL, NULL);
+		}
+}
+
+UNSAFE_ENTRY(void, Unsafe_InitSecureComputation(JNIEnv *env, jobject unsafe, jstring party, jstring port, jstring destIP)) {
+  ThreadToNativeFromVM ttnfv(thread);
+  return Unsafe_InitSecureComputation_impl(env, party, port, destIP);
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_StopSecureComputation(JNIEnv *env, jobject unsafe)) {
+  execYaoProtocol_End(&pd, NULL, NULL);
+  cleanupProtocol(&pd);
+} UNSAFE_END
+
+UNSAFE_ENTRY(jboolean, Unsafe_RevealOblivBoolean(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                Obliv of = p->obool_field(offset);
+
+                obool in;
+                revealOblivBool(&in, of.getBool(), of.getParty());
+
+                return (jboolean) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignBoolean(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+		oop p = JNIHandles::resolve(obj);
+
+		oflag oRValue = p->obool_field(offsetRValue).getBool();
+		oflag oCond = p->obool_field(offsetCond).getBool();
+
+		oflag dest;
+		memset((void *)(& dest), 0, sizeof(oflag));
+		__obliv_c__setSignedKnown(&dest, 1UL, (widest_t )((unsigned long long)0));
+
+		__obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 1UL);
+
+		Obliv newVal(dest, 0);
+		p->obool_field_put(offset, newVal);
+
+} UNSAFE_END
+
+UNSAFE_ENTRY(jboolean, Unsafe_TrueCond(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                oflag dest;
+                memset((void *)(& dest), 0, sizeof(oflag));
+                __obliv_c__setSignedKnown(&dest, 1UL, (widest_t )((unsigned long long)1));
+
+                Obliv newVal(dest, 0);
+                p->obool_field_put(offset, newVal);
+
+		return (jboolean) 1;
+
+} UNSAFE_END
+
+UNSAFE_ENTRY(jbyte, Unsafe_RevealOblivByte(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                Obliv of = p->obyte_field(offset);
+
+                char in;
+                revealOblivChar(&in, of.getChar(), of.getParty());
+
+                return (jbyte) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignByte(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                ochar oRValue = p->obyte_field(offsetRValue).getChar();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+
+                ochar dest;
+                memset((void *)(& dest), 0, sizeof(ochar));
+                __obliv_c__setSignedKnown(&dest, 8UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 8UL);
+
+                Obliv newVal(dest, 0);
+                p->obyte_field_put(offset, newVal);
+} UNSAFE_END
+
+UNSAFE_ENTRY(jshort, Unsafe_RevealOblivShort(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                Obliv of = p->oshort_field(offset);
+
+                short in;
+                revealOblivShort(&in, of.getShort(), of.getParty());
+
+                return (jshort) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignShort(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                oshort oRValue = p->oshort_field(offsetRValue).getShort();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+
+                oshort dest;
+                memset((void *)(& dest), 0, sizeof(oshort));
+                __obliv_c__setSignedKnown(&dest, 16UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 16UL);
+
+                Obliv newVal(dest, 0);
+                p->oshort_field_put(offset, newVal);
+} UNSAFE_END
+
+UNSAFE_ENTRY(jchar, Unsafe_RevealOblivChar(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                Obliv of = p->ochar_field(offset);
+
+                char in;
+                revealOblivChar(&in, of.getChar(), of.getParty());
+
+                return (jchar) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignChar(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                ochar oRValue = p->ochar_field(offsetRValue).getChar();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+
+                ochar dest;
+                memset((void *)(& dest), 0, sizeof(ochar));
+                __obliv_c__setSignedKnown(&dest, 8UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 8UL);
+
+                Obliv newVal(dest, 0);
+                p->ochar_field_put(offset, newVal);
+} UNSAFE_END
+
+UNSAFE_ENTRY(jint, Unsafe_RevealOblivInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                Obliv of = p->oint_field(offset);
+
+                int in;
+                revealOblivInt(&in, of.getInt(), of.getParty());
+
+                return (jint) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignInt(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                oint oRValue = p->oint_field(offsetRValue).getInt();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+
+                oint dest;
+                memset((void *)(& dest), 0, sizeof(oint));
+                __obliv_c__setSignedKnown(&dest, 32UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 32UL);
+
+                Obliv newVal(dest, 0, Obliv::INT);
+                p->oint_field_put(offset, newVal);
+} UNSAFE_END
+
+UNSAFE_ENTRY(jlong, Unsafe_RevealOblivLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                Obliv of = p->olong_field(offset);
+
+                long long in;
+                revealOblivLLong(&in, of.getLong(), of.getParty());
+
+                return (jlong) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignLong(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                olong oRValue = p->olong_field(offsetRValue).getLong();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+
+                olong dest;
+                memset((void *)(& dest), 0, sizeof(olong));
+                __obliv_c__setSignedKnown(&dest, 64UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 64UL);
+
+                Obliv newVal(dest, 0, Obliv::LONG);
+                p->olong_field_put(offset, newVal);
+} UNSAFE_END
+
+UNSAFE_ENTRY(jfloat, Unsafe_RevealOblivFloat(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                Obliv of = p->ofloat_field(offset);
+
+                float *pout, out;
+                int *pin, in;
+                revealOblivInt(&in, of.getFloat(), of.getParty());
+                pout = &out; pin = &in;
+                memcpy(pout, pin, sizeof(*pout));
+
+                return (jfloat) out;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignFloat(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                ofloat32 oRValue = p->ofloat_field(offsetRValue).getFloat();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+
+                ofloat32 dest;
+                memset((void *)(& dest), 0, sizeof(ofloat32));
+                __obliv_c__setSignedKnown(&dest, 32UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 32UL);
+
+                Obliv newVal(dest, 0, Obliv::FLOAT);
+                p->ofloat_field_put(offset, newVal);
+} UNSAFE_END
+
+UNSAFE_ENTRY(jdouble, Unsafe_RevealOblivDouble(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+
+                Obliv of = p->odouble_field(offset);
+
+                double *pout, out;
+                long long *pin, in;
+                revealOblivLLong(&in, of.getDouble(), of.getParty());
+                pout = &out; pin = &in;
+                memcpy(pout, pin, sizeof(*pout));
+
+                return (jdouble) out;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignDouble(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                ofloat64 oRValue = p->odouble_field(offsetRValue).getDouble();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+
+                ofloat64 dest;
+                memset((void *)(& dest), 0, sizeof(ofloat64));
+                __obliv_c__setSignedKnown(&dest, 64UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 64UL);
+
+                Obliv newVal(dest, 0, Obliv::DOUBLE);
+                p->odouble_field_put(offset, newVal);
+} UNSAFE_END
+
 #undef DEFINE_GETSETOOP
 
 #define DEFINE_GETSETOOP_VOLATILE(java_type, Type) \
@@ -478,6 +754,308 @@ DEFINE_GETSETOOP_VOLATILE(jdouble, Double);
 #ifdef SUPPORTS_NATIVE_CX8
 DEFINE_GETSETOOP_VOLATILE(jlong, Long);
 #endif
+
+UNSAFE_ENTRY(jboolean, Unsafe_RevealOblivBooleanVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+				
+				if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
+					OrderAccess::fence();
+				}
+
+                Obliv of = p->obool_field(offset);
+				
+				OrderAccess::acquire();
+
+                obool in;
+                revealOblivBool(&in, of.getBool(), of.getParty());
+
+                return (jboolean) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignBooleanVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                oflag oRValue = p->obool_field(offsetRValue).getBool();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+				
+				OrderAccess::release();
+
+                oflag dest;
+                memset((void *)(& dest), 0, sizeof(oflag));
+                __obliv_c__setSignedKnown(&dest, 1UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 1UL);
+
+                Obliv newVal(dest, 0);
+                p->obool_field_put(offset, newVal);
+				
+				OrderAccess::fence();
+} UNSAFE_END
+
+UNSAFE_ENTRY(jbyte, Unsafe_RevealOblivByteVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+				
+				if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
+					OrderAccess::fence();
+				}				
+
+                Obliv of = p->obyte_field(offset);
+				
+				OrderAccess::acquire();
+
+                char in;
+                revealOblivChar(&in, of.getChar(), of.getParty());
+
+                return (jbyte) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignByteVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                ochar oRValue = p->obyte_field(offsetRValue).getChar();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+				
+				OrderAccess::release();
+
+                ochar dest;
+                memset((void *)(& dest), 0, sizeof(ochar));
+                __obliv_c__setSignedKnown(&dest, 8UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 8UL);
+
+                Obliv newVal(dest, 0);
+                p->obyte_field_put(offset, newVal);
+				
+				OrderAccess::fence();
+} UNSAFE_END
+
+UNSAFE_ENTRY(jshort, Unsafe_RevealOblivShortVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+				
+				if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
+					OrderAccess::fence();
+				}				
+
+                Obliv of = p->oshort_field(offset);
+				
+				OrderAccess::acquire();
+
+                short in;
+                revealOblivShort(&in, of.getShort(), of.getParty());
+
+                return (jshort) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignShortVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                oshort oRValue = p->oshort_field(offsetRValue).getShort();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+				
+				OrderAccess::release();
+
+                oshort dest;
+                memset((void *)(& dest), 0, sizeof(oshort));
+                __obliv_c__setSignedKnown(&dest, 16UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 16UL);
+
+                Obliv newVal(dest, 0);
+                p->oshort_field_put(offset, newVal);
+				
+				OrderAccess::fence();
+} UNSAFE_END
+
+UNSAFE_ENTRY(jchar, Unsafe_RevealOblivCharVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+				
+				if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
+					OrderAccess::fence();
+				}				
+
+                Obliv of = p->ochar_field(offset);
+				
+				OrderAccess::acquire();
+
+                char in;
+                revealOblivChar(&in, of.getChar(), of.getParty());
+
+                return (jchar) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignCharVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                ochar oRValue = p->ochar_field(offsetRValue).getChar();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+				
+				OrderAccess::release();
+
+                ochar dest;
+                memset((void *)(& dest), 0, sizeof(ochar));
+                __obliv_c__setSignedKnown(&dest, 8UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 8UL);
+
+                Obliv newVal(dest, 0);
+                p->ochar_field_put(offset, newVal);
+				
+				OrderAccess::fence();
+} UNSAFE_END
+
+UNSAFE_ENTRY(jint, Unsafe_RevealOblivIntVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+				
+				if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
+					OrderAccess::fence();
+				}				
+
+                Obliv of = p->oint_field(offset);
+				
+				OrderAccess::acquire();
+
+                int in;
+                revealOblivInt(&in, of.getInt(), of.getParty());
+
+                return (jint) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignIntVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                oint oRValue = p->oint_field(offsetRValue).getInt();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+				
+				OrderAccess::release();
+
+                oint dest;
+                memset((void *)(& dest), 0, sizeof(oint));
+                __obliv_c__setSignedKnown(&dest, 32UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 32UL);
+
+                Obliv newVal(dest, 0, Obliv::INT);
+                p->oint_field_put(offset, newVal);
+				
+				OrderAccess::fence();
+} UNSAFE_END
+
+UNSAFE_ENTRY(jlong, Unsafe_RevealOblivLongVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+				
+				if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
+					OrderAccess::fence();
+				}				
+
+                Obliv of = p->olong_field(offset);
+				
+				OrderAccess::acquire();
+
+                long long in;
+                revealOblivLLong(&in, of.getLong(), of.getParty());
+
+                return (jlong) in;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignLongVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                olong oRValue = p->olong_field(offsetRValue).getLong();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+				
+				OrderAccess::release();
+
+                olong dest;
+                memset((void *)(& dest), 0, sizeof(olong));
+                __obliv_c__setSignedKnown(&dest, 64UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 64UL);
+
+                Obliv newVal(dest, 0, Obliv::LONG);
+                p->olong_field_put(offset, newVal);
+				
+				OrderAccess::fence();
+} UNSAFE_END
+
+UNSAFE_ENTRY(jfloat, Unsafe_RevealOblivFloatVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+				
+				if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
+					OrderAccess::fence();
+				}				
+
+                Obliv of = p->ofloat_field(offset);
+				
+				OrderAccess::acquire();
+
+                float *pout, out;
+                int *pin, in;
+                revealOblivInt(&in, of.getFloat(), of.getParty());
+                pout = &out; pin = &in;
+                memcpy(pout, pin, sizeof(*pout));
+
+                return (jfloat) out;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignFloatVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                ofloat32 oRValue = p->ofloat_field(offsetRValue).getFloat();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+				
+				OrderAccess::release();
+
+                ofloat32 dest;
+                memset((void *)(& dest), 0, sizeof(ofloat32));
+                __obliv_c__setSignedKnown(&dest, 32UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 32UL);
+
+                Obliv newVal(dest, 0, Obliv::FLOAT);
+                p->ofloat_field_put(offset, newVal);
+				
+				OrderAccess::fence();
+} UNSAFE_END
+
+UNSAFE_ENTRY(jdouble, Unsafe_RevealOblivDoubleVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset)) {
+                oop p = JNIHandles::resolve(obj);
+				
+				if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
+					OrderAccess::fence();
+				}				
+
+                Obliv of = p->odouble_field(offset);
+				
+				OrderAccess::acquire();
+
+                double *pout, out;
+                long long *pin, in;
+                revealOblivLLong(&in, of.getDouble(), of.getParty());
+                pout = &out; pin = &in;
+                memcpy(pout, pin, sizeof(*pout));
+
+                return (jdouble) out;
+} UNSAFE_END
+
+UNSAFE_ENTRY(void, Unsafe_CondAssignDoubleVolatile(JNIEnv *env, jobject unsafe, jobject obj, jlong offset, jlong offsetCond, jlong offsetRValue)) {
+                oop p = JNIHandles::resolve(obj);
+
+                ofloat64 oRValue = p->odouble_field(offsetRValue).getDouble();
+                oflag oCond = p->obool_field(offsetCond).getBool();
+				
+				OrderAccess::release();
+
+                ofloat64 dest;
+                memset((void *)(& dest), 0, sizeof(ofloat64));
+                __obliv_c__setSignedKnown(&dest, 64UL, (widest_t )((unsigned long long)0));
+
+                __obliv_c__condAssign((const void*)&oCond, &dest, (const void*)&oRValue, 64UL);
+
+                Obliv newVal(dest, 0, Obliv::DOUBLE);
+                p->odouble_field_put(offset, newVal);
+				
+				OrderAccess::fence();
+} UNSAFE_END
 
 #undef DEFINE_GETSETOOP_VOLATILE
 
@@ -1244,7 +1822,42 @@ static JNINativeMethod jdk_internal_misc_Unsafe_methods[] = {
     {CC "fullFence",          CC "()V",                  FN_PTR(Unsafe_FullFence)},
 
     {CC "isBigEndian0",       CC "()Z",                  FN_PTR(Unsafe_isBigEndian0)},
-    {CC "unalignedAccess0",   CC "()Z",                  FN_PTR(Unsafe_unalignedAccess0)}
+    {CC "unalignedAccess0",   CC "()Z",                  FN_PTR(Unsafe_unalignedAccess0)},
+    {CC "initSecureComputation",        CC "(" LANG "String;" LANG "String;" LANG "String;)" "V", FN_PTR(Unsafe_InitSecureComputation)},
+    {CC "stopSecureComputation",        CC "()V", FN_PTR(Unsafe_StopSecureComputation)},
+    {CC "revealOblivBoolean",        CC "(" OBJ "J)" "Z", FN_PTR(Unsafe_RevealOblivBoolean)},
+    {CC "revealOblivByte",        CC "(" OBJ "J)" "B", FN_PTR(Unsafe_RevealOblivByte)},
+    {CC "revealOblivShort",        CC "(" OBJ "J)" "S", FN_PTR(Unsafe_RevealOblivShort)},
+    {CC "revealOblivChar",        CC "(" OBJ "J)" "C", FN_PTR(Unsafe_RevealOblivChar)},
+    {CC "revealOblivInt",        CC "(" OBJ "J)" "I", FN_PTR(Unsafe_RevealOblivInt)},
+    {CC "revealOblivLong",        CC "(" OBJ "J)" "J", FN_PTR(Unsafe_RevealOblivLong)},
+    {CC "revealOblivFloat",        CC "(" OBJ "J)" "F", FN_PTR(Unsafe_RevealOblivFloat)},
+    {CC "revealOblivDouble",       CC "(" OBJ "J)" "D", FN_PTR(Unsafe_RevealOblivDouble)},
+    {CC "condAssignBoolean",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignBoolean)},
+    {CC "condAssignByte",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignByte)},
+    {CC "condAssignShort",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignShort)},
+    {CC "condAssignChar",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignChar)},
+    {CC "condAssignInt",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignInt)},
+    {CC "condAssignLong",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignLong)},
+    {CC "condAssignFloat",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignFloat)},
+    {CC "condAssignDouble",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignDouble)},
+    {CC "revealOblivBooleanVolatile",        CC "(" OBJ "J)" "Z", FN_PTR(Unsafe_RevealOblivBooleanVolatile)},
+    {CC "revealOblivByteVolatile",        CC "(" OBJ "J)" "B", FN_PTR(Unsafe_RevealOblivByteVolatile)},
+    {CC "revealOblivShortVolatile",        CC "(" OBJ "J)" "S", FN_PTR(Unsafe_RevealOblivShortVolatile)},
+    {CC "revealOblivCharVolatile",        CC "(" OBJ "J)" "C", FN_PTR(Unsafe_RevealOblivCharVolatile)},
+    {CC "revealOblivIntVolatile",        CC "(" OBJ "J)" "I", FN_PTR(Unsafe_RevealOblivIntVolatile)},
+    {CC "revealOblivLongVolatile",        CC "(" OBJ "J)" "J", FN_PTR(Unsafe_RevealOblivLongVolatile)},
+    {CC "revealOblivFloatVolatile",        CC "(" OBJ "J)" "F", FN_PTR(Unsafe_RevealOblivFloatVolatile)},
+    {CC "revealOblivDoubleVolatile",       CC "(" OBJ "J)" "D", FN_PTR(Unsafe_RevealOblivDoubleVolatile)},
+    {CC "condAssignBooleanVolatile",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignBooleanVolatile)},
+    {CC "condAssignByteVolatile",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignByteVolatile)},
+    {CC "condAssignShortVolatile",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignShortVolatile)},
+    {CC "condAssignCharVolatile",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignCharVolatile)},
+    {CC "condAssignIntVolatile",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignIntVolatile)},
+    {CC "condAssignLongVolatile",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignLongVolatile)},
+    {CC "condAssignFloatVolatile",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignFloatVolatile)},
+    {CC "condAssignDoubleVolatile",        CC "(" OBJ "J""J""J"")V", FN_PTR(Unsafe_CondAssignDoubleVolatile)},
+    {CC "trueCond",        CC "(" OBJ "J)" "Z", FN_PTR(Unsafe_TrueCond)}
 };
 
 #undef CC

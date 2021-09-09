@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 1996, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -453,6 +454,40 @@ class Field extends AccessibleObject implements Member {
     }
 
     /**
+     * Reveals the value of a static or instance obliv {@code boolean} field.
+     *
+     * @param obj the object to extract the obliv {@code boolean} value
+     * from
+     * @return the value of the {@code boolean} field
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is inaccessible.
+     * @exception IllegalArgumentException  if the specified object is not
+     *              an instance of the class or interface declaring the
+     *              underlying field (or a subclass or implementor
+     *              thereof), or if the field value cannot be
+     *              converted to the type {@code boolean} by a
+     *              widening conversion.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     * @see       Field#get
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public boolean revealOblivBoolean(Object obj)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        return getFieldAccessor(obj).revealOblivBoolean(obj);
+    }
+
+    /**
      * Gets the value of a static or instance {@code byte} field.
      *
      * @param obj the object to extract the {@code byte} value
@@ -484,6 +519,40 @@ class Field extends AccessibleObject implements Member {
             checkAccess(caller, obj);
         }
         return getFieldAccessor(obj).getByte(obj);
+    }
+
+    /**
+     * Reveals the value of a static or instance obliv {@code byte} field.
+     *
+     * @param obj the object to extract the obliv {@code byte} value
+     * from
+     * @return the value of the {@code byte} field
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is inaccessible.
+     * @exception IllegalArgumentException  if the specified object is not
+     *              an instance of the class or interface declaring the
+     *              underlying field (or a subclass or implementor
+     *              thereof), or if the field value cannot be
+     *              converted to the type {@code byte} by a
+     *              widening conversion.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     * @see       Field#get
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public byte revealOblivByte(Object obj)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        return getFieldAccessor(obj).revealOblivByte(obj);
     }
 
     /**
@@ -520,6 +589,43 @@ class Field extends AccessibleObject implements Member {
             checkAccess(caller, obj);
         }
         return getFieldAccessor(obj).getChar(obj);
+    }
+
+
+    /**
+     * Reveals the value of a static or instance field of type
+     * obliv {@code char} or of another primitive type convertible to
+     * type obliv {@code char} via a widening conversion.
+     *
+     * @param obj the object to extract the obliv {@code char} value
+     * from
+     * @return the value of the field converted to type {@code char}
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is inaccessible.
+     * @exception IllegalArgumentException  if the specified object is not
+     *              an instance of the class or interface declaring the
+     *              underlying field (or a subclass or implementor
+     *              thereof), or if the field value cannot be
+     *              converted to the type {@code char} by a
+     *              widening conversion.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     * @see Field#get
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public char revealOblivChar(Object obj)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        return getFieldAccessor(obj).revealOblivChar(obj);
     }
 
     /**
@@ -559,6 +665,42 @@ class Field extends AccessibleObject implements Member {
     }
 
     /**
+     * Reveals the value of a static or instance field of type
+     * obliv {@code short} or of another primitive type convertible to
+     * type obliv {@code short} via a widening conversion.
+     *
+     * @param obj the object to extract the obliv {@code short} value
+     * from
+     * @return the value of the field converted to type {@code short}
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is inaccessible.
+     * @exception IllegalArgumentException  if the specified object is not
+     *              an instance of the class or interface declaring the
+     *              underlying field (or a subclass or implementor
+     *              thereof), or if the field value cannot be
+     *              converted to the type {@code short} by a
+     *              widening conversion.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     * @see       Field#get
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public short revealOblivShort(Object obj)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        return getFieldAccessor(obj).revealOblivShort(obj);
+    }
+
+    /**
      * Gets the value of a static or instance field of type
      * {@code int} or of another primitive type convertible to
      * type {@code int} via a widening conversion.
@@ -592,6 +734,42 @@ class Field extends AccessibleObject implements Member {
             checkAccess(caller, obj);
         }
         return getFieldAccessor(obj).getInt(obj);
+    }
+
+    /**
+     * Reveals the obliv value of a static or instance field of type
+     * {@code int} or of another primitive type convertible to
+     * type {@code int} via a widening conversion.
+     *
+     * @param obj the object to extract the obliv {@code int} value
+     * from
+     * @return the value of the field converted to type {@code int}
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is inaccessible.
+     * @exception IllegalArgumentException  if the specified object is not
+     *              an instance of the class or interface declaring the
+     *              underlying field (or a subclass or implementor
+     *              thereof), or if the field value cannot be
+     *              converted to the type {@code int} by a
+     *              widening conversion.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     * @see       Field#get
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public int revealOblivInt(Object obj)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        return getFieldAccessor(obj).revealOblivInt(obj);
     }
 
     /**
@@ -631,6 +809,42 @@ class Field extends AccessibleObject implements Member {
     }
 
     /**
+     * Reveals the value of a static or instance field of type
+     * obliv {@code long} or of another primitive type convertible to
+     * type obliv {@code long} via a widening conversion.
+     *
+     * @param obj the object to extract the obliv {@code long} value
+     * from
+     * @return the value of the field converted to type {@code long}
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is inaccessible.
+     * @exception IllegalArgumentException  if the specified object is not
+     *              an instance of the class or interface declaring the
+     *              underlying field (or a subclass or implementor
+     *              thereof), or if the field value cannot be
+     *              converted to the type {@code long} by a
+     *              widening conversion.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     * @see       Field#get
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public long revealOblivLong(Object obj)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        return getFieldAccessor(obj).revealOblivLong(obj);
+    }
+
+    /**
      * Gets the value of a static or instance field of type
      * {@code float} or of another primitive type convertible to
      * type {@code float} via a widening conversion.
@@ -667,6 +881,42 @@ class Field extends AccessibleObject implements Member {
     }
 
     /**
+     * Reveal the obliv value of a static or instance field of type
+     * {@code float} or of another primitive type convertible to
+     * type {@code float} via a widening conversion.
+     *
+     * @param obj the object to reveal the obliv {@code float} value
+     * from
+     * @return the value of the field converted to type {@code float}
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is inaccessible.
+     * @exception IllegalArgumentException  if the specified object is not
+     *              an instance of the class or interface declaring the
+     *              underlying field (or a subclass or implementor
+     *              thereof), or if the field value cannot be
+     *              converted to the type {@code float} by a
+     *              widening conversion.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     * @see Field#get
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public float revealOblivFloat(Object obj)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        return getFieldAccessor(obj).revealOblivFloat(obj);
+    }
+
+    /**
      * Gets the value of a static or instance field of type
      * {@code double} or of another primitive type convertible to
      * type {@code double} via a widening conversion.
@@ -700,6 +950,42 @@ class Field extends AccessibleObject implements Member {
             checkAccess(caller, obj);
         }
         return getFieldAccessor(obj).getDouble(obj);
+    }
+
+    /**
+     * Reveals the value of a static or instance field of type
+     * obliv {@code double} or of another primitive type convertible to
+     * type obliv {@code double} via a widening conversion.
+     *
+     * @param obj the object to extract the obliv {@code double} value
+     * from
+     * @return the value of the field converted to type {@code double}
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is inaccessible.
+     * @exception IllegalArgumentException  if the specified object is not
+     *              an instance of the class or interface declaring the
+     *              underlying field (or a subclass or implementor
+     *              thereof), or if the field value cannot be
+     *              converted to the type {@code double} by a
+     *              widening conversion.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     * @see       Field#get
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public double revealOblivDouble(Object obj)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        return getFieldAccessor(obj).revealOblivDouble(obj);
     }
 
     /**
@@ -817,6 +1103,38 @@ class Field extends AccessibleObject implements Member {
     }
 
     /**
+     * Conditionally sets the value of a field as a oblivious {@code boolean} on the specified object.
+     *
+     * @param obj the object whose field should be modified
+     * @param cond  the oblivious condition to evaluate
+     * @param oz the oblivious value for the field of {@code obj}
+     * being modified
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is either inaccessible or final.
+     * @exception IllegalArgumentException  if the specified object is not an
+     *              instance of the class or interface declaring the underlying
+     *              field (or a subclass or implementor thereof),
+     *              or if an unwrapping conversion fails.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public void condAssignBoolean(Object obj, Field cond, Field oz)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        getFieldAccessor(obj).condAssignBoolean(obj, cond, oz);
+    }
+
+    /**
      * Sets the value of a field as a {@code byte} on the specified object.
      * This method is equivalent to
      * {@code set(obj, bObj)},
@@ -850,6 +1168,38 @@ class Field extends AccessibleObject implements Member {
             checkAccess(caller, obj);
         }
         getFieldAccessor(obj).setByte(obj, b);
+    }
+
+    /**
+     * Conditionally sets the value of a field as a oblivious {@code byte} on the specified object.
+     *
+     * @param obj the object whose field should be modified
+     * @param cond  the oblivious condition to evaluate
+     * @param ob the oblivious value for the field of {@code obj}
+     * being modified
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is either inaccessible or final.
+     * @exception IllegalArgumentException  if the specified object is not an
+     *              instance of the class or interface declaring the underlying
+     *              field (or a subclass or implementor thereof),
+     *              or if an unwrapping conversion fails.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public void condAssignByte(Object obj, Field cond, Field ob)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        getFieldAccessor(obj).condAssignByte(obj, cond, ob);
     }
 
     /**
@@ -889,6 +1239,38 @@ class Field extends AccessibleObject implements Member {
     }
 
     /**
+     * Conditionally sets the value of a field as a oblivious {@code char} on the specified object.
+     *
+     * @param obj the object whose field should be modified
+     * @param cond  the oblivious condition to evaluate
+     * @param oc the oblivious value for the field of {@code obj}
+     * being modified
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is either inaccessible or final.
+     * @exception IllegalArgumentException  if the specified object is not an
+     *              instance of the class or interface declaring the underlying
+     *              field (or a subclass or implementor thereof),
+     *              or if an unwrapping conversion fails.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public void condAssignChar(Object obj, Field cond, Field oc)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        getFieldAccessor(obj).condAssignChar(obj, cond, oc);
+    }
+
+    /**
      * Sets the value of a field as a {@code short} on the specified object.
      * This method is equivalent to
      * {@code set(obj, sObj)},
@@ -922,6 +1304,38 @@ class Field extends AccessibleObject implements Member {
             checkAccess(caller, obj);
         }
         getFieldAccessor(obj).setShort(obj, s);
+    }
+
+    /**
+     * Conditionally sets the value of a field as a oblivious {@code short} on the specified object.
+     *
+     * @param obj the object whose field should be modified
+     * @param cond  the oblivious condition to evaluate
+     * @param os the oblivious value for the field of {@code obj}
+     * being modified
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is either inaccessible or final.
+     * @exception IllegalArgumentException  if the specified object is not an
+     *              instance of the class or interface declaring the underlying
+     *              field (or a subclass or implementor thereof),
+     *              or if an unwrapping conversion fails.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public void condAssignShort(Object obj, Field cond, Field os)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        getFieldAccessor(obj).condAssignShort(obj, cond, os);
     }
 
     /**
@@ -961,6 +1375,38 @@ class Field extends AccessibleObject implements Member {
     }
 
     /**
+     * Conditionally sets the value of a field as a oblivious {@code int} on the specified object.
+     *
+     * @param obj the object whose field should be modified
+     * @param cond  the oblivious condition to evaluate
+     * @param oi the oblivious value for the field of {@code obj}
+     * being modified
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is either inaccessible or final.
+     * @exception IllegalArgumentException  if the specified object is not an
+     *              instance of the class or interface declaring the underlying
+     *              field (or a subclass or implementor thereof),
+     *              or if an unwrapping conversion fails.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public void condAssignInt(Object obj, Field cond, Field oi)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        getFieldAccessor(obj).condAssignInt(obj, cond, oi);
+    }
+
+    /**
      * Sets the value of a field as a {@code long} on the specified object.
      * This method is equivalent to
      * {@code set(obj, lObj)},
@@ -994,6 +1440,38 @@ class Field extends AccessibleObject implements Member {
             checkAccess(caller, obj);
         }
         getFieldAccessor(obj).setLong(obj, l);
+    }
+
+    /**
+     * Conditionally sets the value of a field as a oblivious {@code long} on the specified object.
+     *
+     * @param obj the object whose field should be modified
+     * @param cond  the oblivious condition to evaluate
+     * @param ol the oblivious value for the field of {@code obj}
+     * being modified
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is either inaccessible or final.
+     * @exception IllegalArgumentException  if the specified object is not an
+     *              instance of the class or interface declaring the underlying
+     *              field (or a subclass or implementor thereof),
+     *              or if an unwrapping conversion fails.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public void condAssignLong(Object obj, Field cond, Field ol)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        getFieldAccessor(obj).condAssignLong(obj, cond, ol);
     }
 
     /**
@@ -1033,6 +1511,38 @@ class Field extends AccessibleObject implements Member {
     }
 
     /**
+     * Conditionally sets the value of a field as a oblivious {@code float} on the specified object.
+     *
+     * @param obj the object whose field should be modified
+     * @param cond  the oblivious condition to evaluate
+     * @param of the oblivious value for the field of {@code obj}
+     * being modified
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is either inaccessible or final.
+     * @exception IllegalArgumentException  if the specified object is not an
+     *              instance of the class or interface declaring the underlying
+     *              field (or a subclass or implementor thereof),
+     *              or if an unwrapping conversion fails.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public void condAssignFloat(Object obj, Field cond, Field of)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        getFieldAccessor(obj).condAssignFloat(obj, cond, of);
+    }
+
+    /**
      * Sets the value of a field as a {@code double} on the specified object.
      * This method is equivalent to
      * {@code set(obj, dObj)},
@@ -1066,6 +1576,38 @@ class Field extends AccessibleObject implements Member {
             checkAccess(caller, obj);
         }
         getFieldAccessor(obj).setDouble(obj, d);
+    }
+
+    /**
+     * Conditionally sets the value of a field as a oblivious {@code double} on the specified object.
+     *
+     * @param obj the object whose field should be modified
+     * @param cond  the oblivious condition to evaluate
+     * @param od the oblivious value for the field of {@code obj}
+     * being modified
+     *
+     * @exception IllegalAccessException    if this {@code Field} object
+     *              is enforcing Java language access control and the underlying
+     *              field is either inaccessible or final.
+     * @exception IllegalArgumentException  if the specified object is not an
+     *              instance of the class or interface declaring the underlying
+     *              field (or a subclass or implementor thereof),
+     *              or if an unwrapping conversion fails.
+     * @exception NullPointerException      if the specified object is null
+     *              and the field is an instance field.
+     * @exception ExceptionInInitializerError if the initialization provoked
+     *              by this method fails.
+     */
+    @CallerSensitive
+    @ForceInline // to ensure Reflection.getCallerClass optimization
+    public void condAssignDouble(Object obj, Field cond, Field od)
+        throws IllegalArgumentException, IllegalAccessException
+    {
+        if (!override) {
+            Class<?> caller = Reflection.getCallerClass();
+            checkAccess(caller, obj);
+        }
+        getFieldAccessor(obj).condAssignDouble(obj, cond, od);
     }
 
     // check access to field

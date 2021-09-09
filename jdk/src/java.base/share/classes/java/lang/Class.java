@@ -1961,6 +1961,51 @@ public final class Class<T> implements java.io.Serializable,
         return getReflectionFactory().copyField(field);
     }
 
+    /**
+     * Returns a {@code Field} object that reflects the specified public member
+     * field of the class or interface represented by this {@code Class}
+     * object. The {@code name} parameter is a {@code String} specifying the
+     * simple name of the desired field.
+     *
+     * <p> The field to be reflected is determined by the algorithm that
+     * follows.  Let C be the class or interface represented by this object:
+     *
+     * <OL>
+     * <LI> If C declares a public field with the name specified, that is the
+     *      field to be reflected.</LI>
+     * <LI> If no field was found in step 1 above, this algorithm is applied
+     *      recursively to each direct superinterface of C. The direct
+     *      superinterfaces are searched in the order they were declared.</LI>
+     * </OL>
+     *
+     * <p> If this {@code Class} object represents an array type, then this
+     * method does not find the {@code length} field of the array type.
+     *
+     * @param name the field name
+     * @return the {@code Field} object of this class specified by
+     *         {@code name}
+     *
+     * @since 1.1
+     * @jls 8.2 Class Members
+     * @jls 8.3 Field Declarations
+     */
+    @CallerSensitive
+    public Field getSafeField(String name) {
+        Objects.requireNonNull(name);
+        SecurityManager sm;
+	try {
+		sm = System.getSecurityManager();
+	        if (sm != null) {
+        	    checkMemberAccess(sm, Member.PUBLIC, Reflection.getCallerClass(), true);
+	        }
+	} catch (SecurityException se) {}
+        Field field = getField0(name);
+        //if (field == null) {
+        //    throw new NoSuchFieldException(name);
+        //}
+        return getReflectionFactory().copyField(field);
+    }
+
 
     /**
      * Returns a {@code Method} object that reflects the specified public

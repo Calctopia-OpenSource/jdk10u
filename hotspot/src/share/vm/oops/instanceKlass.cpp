@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 1997, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -344,6 +345,14 @@ void InstanceKlass::deallocate_contents(ClassLoaderData* loader_data) {
     MetadataFactory::free_array<jushort>(loader_data, fields());
   }
   set_fields(NULL, 0);
+  if (oblivs() != NULL) {
+    MetadataFactory::free_array<bool>(loader_data, oblivs());
+  }
+  set_oblivs(NULL);
+  if (oblivsParties() != NULL) {
+    MetadataFactory::free_array<int>(loader_data, oblivsParties());
+  }
+  set_oblivsParties(NULL);
 
   // If a method from a redefined class is using this constant pool, don't
   // delete it, yet.  The new class's previous version will point to this.

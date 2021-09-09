@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
  * Copyright (c) 2002, 2016, Oracle and/or its affiliates. All rights reserved.
  * Copyright 2007, 2008, 2011 Red Hat, Inc.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -129,6 +130,84 @@
 #define SET_STACK_LONG(value, offset)   (((VMJavaVal64*)&topOfStack[-(offset)])->l = (value))
 #define SET_STACK_LONG_FROM_ADDR(addr, offset)   (((VMJavaVal64*)&topOfStack[-(offset)])->l =  \
                                                  ((VMJavaVal64*)(addr))->l)
+
+// Parties are stored incrementing the party number in 1 because party 0 is everybody
+//  and storing 0 denotes non-obliviousness
+ #define STACK_OBLIVIOUS_FLOAT(offset)   (*((jfloat *) &topOfStack[-(offset)]))
+
+ #define SET_STACK_OBLIVIOUS_FLOAT(value, offset)  (*((jfloat *)&topOfStack[-(offset)]) = (value))
+ #define SET_STACK_OBLIVIOUS_INT(value, offset)  (*((jint *)&topOfStack[-(offset)]) = (value))
+ #define SET_STACK_OBLIVIOUS_DOUBLE(value, offset)  (*((jdouble *)&topOfStack[-(offset)]) = (value))
+ #define SET_STACK_OBLIVIOUS_LONG(value, offset)  (*((jlong *)&topOfStack[-(offset)]) = (value))
+
+#define SET_STACK_OBLIVIOUS_POSITION(position, stackSlot) {        \
+	                address fi = stackSlot;                            \
+	                *(fi+7) = (int) position+1;  \
+}
+
+#define SET_STACK_DOUBLE_OBLIVIOUS_POSITION(position, stackSlot) {        \
+	                address fi = stackSlot;                            \
+	                *((int *)(fi-8)) = (int) position+1;  \
+}
+
+#define SET_STACK_LONG_OBLIVIOUS_POSITION(position, stackSlot) {        \
+                        address fi = stackSlot;                            \
+	                *((int *)(fi-8)) = (int) position+1;  \
+}
+
+#define STACK_OBLIVIOUS_POSITION(stackSlot)  ((*(((address)stackSlot)+7))-1)
+
+#define STACK_DOUBLE_OBLIVIOUS_POSITION(stackSlot)  ((*((int *)(((address)stackSlot)-8)))-1)
+#define STACK_LONG_OBLIVIOUS_POSITION(stackSlot)  ((*((int *)(((address)stackSlot)-8)))-1)
+
+//#define IS_STACK_FLOAT_OBLIVIOUS(stackSlot) (*((stackSlot)+7) >= 1)
+static inline bool IS_STACK_FLOAT_OBLIVIOUS(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack, int stackPos) {
+        if ((*((STACK_SLOT(stackPos))+7)) <= 0)
+                return false;
+        int pos = STACK_OBLIVIOUS_POSITION(STACK_SLOT(stackPos));
+        if (oblivStack->length() <= pos)
+                return false;
+        if(oblivStack->at(pos).isInitialized())
+                return true;
+        return false;
+}
+
+//#define IS_STACK_INT_OBLIVIOUS(stackSlot) (*((stackSlot)+7) >= 1)
+static inline bool IS_STACK_INT_OBLIVIOUS(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack, int stackPos) { 
+	if ((*((STACK_SLOT(stackPos))+7)) <= 0)          
+		return false;                      
+	int pos = STACK_OBLIVIOUS_POSITION(STACK_SLOT(stackPos));
+	if (oblivStack->length() <= pos)
+		return false;                      
+	if(oblivStack->at(pos).isInitialized())    
+		return true;                       
+	return false;                              
+}
+
+//#define IS_STACK_DOUBLE_OBLIVIOUS(stackSlot) (*((int *)((stackSlot)-8)) >= 1)
+static inline bool IS_STACK_DOUBLE_OBLIVIOUS(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack, int stackPos) {
+        if ((*((int *)((STACK_SLOT(stackPos))-8))) <=0)
+                return false;
+        int pos = STACK_DOUBLE_OBLIVIOUS_POSITION(STACK_SLOT(stackPos));
+        if (oblivStack->length() <= pos)
+                return false;
+        if(oblivStack->at(pos).isInitialized())
+                return true;
+        return false;
+}
+
+//#define IS_STACK_LONG_OBLIVIOUS(stackSlot) (*((int *)((stackSlot)-8)) >= 1)
+static inline bool IS_STACK_LONG_OBLIVIOUS(intptr_t* topOfStack, GrowableArray<OblivContainer>* oblivStack, int stackPos) {
+        if ((*((int *)((STACK_SLOT(stackPos))-8))) <=0)
+                return false;
+        int pos = STACK_LONG_OBLIVIOUS_POSITION(STACK_SLOT(stackPos));
+        if (oblivStack->length() <= pos)
+                return false;
+        if(oblivStack->at(pos).isInitialized())
+                return true;
+        return false;
+}
+
 // JavaLocals implementation
 
 #define LOCALS_SLOT(offset)    ((intptr_t*)&locals[-(offset)])
