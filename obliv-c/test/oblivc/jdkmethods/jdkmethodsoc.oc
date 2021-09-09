@@ -1,0 +1,2128 @@
+/*
+ * Copyright (c) 2021 Calctopia and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ */
+
+#include <obliv.oh>
+#include <stdio.h>
+#include "../common/util.h"
+
+#include "jdkmethods.h"
+
+obits64 extractFloat64Frac( ofloat64 a ) obliv
+{
+    return a & LIT64( 0x000FFFFFFFFFFFFF );
+}
+
+oint16 extractFloat64Exp( ofloat64 a ) obliv
+{
+    return ( a>>52 ) & 0x7FF;
+}
+
+oflag extractFloat64Sign( ofloat64 a ) obliv
+{
+    return a>>63;
+}
+
+obits32 extractFloat32Frac( ofloat32 a ) obliv
+{
+    return a & 0x007FFFFF;
+}
+
+oint16 extractFloat32Exp( ofloat32 a ) obliv
+{
+    return ( a>>23 ) & 0xFF;
+}
+
+oflag extractFloat32Sign( ofloat32 a ) obliv
+{
+    return a>>31;
+}
+
+ofloat32 packFloat32( oflag zSign, oint16 zExp, obits32 zSig ) obliv
+{
+    return ( ( (obits32) zSign )<<31 ) + ( ( (obits32) zExp )<<23 ) + zSig;
+}
+
+ofloat64 packFloat64( oflag zSign, oint16 zExp, obits64 zSig ) obliv
+{
+    return ( ( (obits64) zSign )<<63 ) + ( ( (obits64) zExp )<<52 ) + zSig;
+}
+
+ofloat64 float64_abs (ofloat64 x){
+	return x & 0x7FFFFFFFFFFFFFFF;
+}
+
+oint8 countLeadingZeros32( obits32 a ) obliv
+{
+    oint8 shiftCount = 0;
+
+    obliv if ( a < 0x10000 ) {
+        shiftCount += 16;
+        a = a<<16;
+    }
+    obliv if ( a < 0x1000000 ) {
+        shiftCount += 8;
+        a = a<<8;
+    }
+
+    a = a>>24;
+
+    obliv if (a == 0) {
+        shiftCount += 8;
+    } else obliv if (a == 1) {
+        shiftCount += 7;
+    } else obliv if ( a >= 2) {
+        obliv if ( a <= 3) 
+            shiftCount += 6;
+    } 
+    obliv if (a >= 4 ) {
+        obliv if ( a <= 7)
+            shiftCount += 5;
+    } 
+    obliv if (a >= 8 ) {
+        obliv if ( a <= 15)
+            shiftCount += 4;
+    }
+    obliv if (a >= 16 ) {
+        obliv if ( a <= 31)
+            shiftCount += 3;
+    } 
+    obliv if (a >= 32 ) {
+        obliv if ( a <= 63)
+            shiftCount += 2;
+    }
+    obliv if (a >= 64 ) {
+        obliv if ( a <= 127)
+            shiftCount += 1;
+    }
+
+    return shiftCount;
+}
+
+oint8 countLeadingZeros64( obits64 a ) obliv
+{
+    oint8 shiftCount;
+
+    shiftCount = 0;
+    obliv if ( a < ( (obits64) 1 )<<32 ) {
+        shiftCount += 32;
+    }
+    else {
+        a >>= 32;
+    }
+    shiftCount += countLeadingZeros32( a );
+    return shiftCount;
+}
+
+obits32 power2 (obits32 exp) obliv
+{
+    obits32 result;
+
+    obliv if (exp == 0)
+	result = 1;
+    else obliv if (exp == 1)
+	result = 2;
+    else obliv if (exp == 2)
+	result = 4;
+    else obliv if (exp == 3)
+	result = 8;
+    else obliv if (exp == 4)
+	result = 16;
+    else obliv if (exp == 5)
+	result = 32;
+    else obliv if (exp == 6)
+	result = 64;
+    else obliv if (exp == 7)
+	result =128;
+    else obliv if (exp == 8)
+	result = 256;
+    else obliv if (exp == 9)
+	result = 512;
+    else obliv if (exp ==10)
+	result = 1024;
+    else obliv if (exp ==11)
+	result = 2048;
+    else obliv if (exp ==12)
+	result = 4096;
+    else obliv if (exp ==13)
+	result = 8192;
+    else obliv if (exp ==14)
+	result =16384;
+    else obliv if (exp ==15)
+	result =32768;
+    else obliv if (exp ==16)
+	result =65536;
+    else obliv if (exp ==17)
+	result =131072;
+    else obliv if (exp ==18)
+	result =262144;
+    else obliv if (exp ==19)
+	result =524288;
+    else obliv if (exp ==20)
+	result =1048576;
+    else obliv if (exp ==21)
+	result =2097152;
+    else obliv if (exp ==22)
+	result =4194304;
+    else obliv if (exp ==23)
+	result =8388608;
+    else obliv if (exp ==24)
+	result =16777216;
+    else obliv if (exp ==25)
+	result =33554432;
+    else obliv if (exp ==26)
+	result =67108864;
+    else obliv if (exp ==27)
+	result =134217728;
+    else obliv if (exp ==28)
+	result =268435456;
+    else obliv if (exp ==29)
+	result =536870912;
+    else obliv if (exp ==30)
+	result =1073741824;
+    else obliv if (exp ==31)
+	result =2147483648;
+    else obliv if (exp ==32)
+	result = 4294967296; // MAX INT
+    return result;
+}
+
+obits64 power2_64 (obits64 exp) obliv
+{
+    obits64 result;
+
+    obliv if (exp == 0)
+		result = 1;
+    else obliv if (exp == 1)
+		result = 2;
+    else obliv if (exp == 2)
+		result = 4;
+    else obliv if (exp == 3)
+		result = 8;
+    else obliv if (exp == 4)
+		result = 16;
+    else obliv if (exp == 5)
+		result = 32;
+    else obliv if (exp == 6)
+		result = 64;
+    else obliv if (exp == 7)
+		result =128;
+    else obliv if (exp == 8)
+		result = 256;
+    else obliv if (exp == 9)
+		result = 512;
+    else obliv if (exp ==10)
+		result = 1024;
+    else obliv if (exp ==11)
+		result = 2048;
+    else obliv if (exp ==12)
+		result = 4096;
+    else obliv if (exp ==13)
+		result = 8192;
+    else obliv if (exp ==14)
+		result =16384;
+    else obliv if (exp ==15)
+		result =32768;
+    else obliv if (exp ==16)
+		result =65536;
+    else obliv if (exp ==17)
+		result =131072;
+    else obliv if (exp ==18)
+		result =262144;
+    else obliv if (exp ==19)
+		result =524288;
+    else obliv if (exp ==20)
+		result =1048576;
+    else obliv if (exp ==21)
+		result =2097152;
+    else obliv if (exp ==22)
+		result =4194304;
+    else obliv if (exp ==23)
+		result =8388608;
+    else obliv if (exp ==24)
+		result =16777216;
+    else obliv if (exp ==25)
+		result =33554432;
+    else obliv if (exp ==26)
+		result =67108864;
+    else obliv if (exp ==27)
+		result =134217728;
+    else obliv if (exp ==28)
+		result =268435456;
+    else obliv if (exp ==29)
+		result =536870912;
+    else obliv if (exp ==30)
+		result =1073741824;
+    else obliv if (exp ==31)
+		result =2147483648;
+	else obliv if (exp ==32)
+		result = 4294967296; // MAX INT32
+	else obliv if (exp ==33)
+		result = 8589934592;
+	else obliv if (exp ==34)
+		result = 17179869184;
+	else obliv if (exp ==35)
+		result = 34359738368;
+	else obliv if (exp ==36)
+		result = 68719476736;
+	else obliv if (exp ==37)
+		result = 137438953472;
+	else obliv if (exp ==38)
+		result = 274877906944;
+	else obliv if (exp ==39)
+		result = 549755813888;
+	else obliv if (exp ==40)
+		result = 1099511627776;
+	else obliv if (exp ==41)
+		result = 2199023255552;
+	else obliv if (exp ==42)
+		result = 4398046511104;
+	else obliv if (exp ==43)
+		result = 8796093022208;
+	else obliv if (exp ==44)
+		result = 17592186044416;
+	else obliv if (exp ==45)
+		result = 35184372088832;
+	else obliv if (exp ==46)
+		result = 70368744177664;
+	else obliv if (exp ==47)
+		result = 140737488355328;
+	else obliv if (exp ==48)
+		result = 281474976710656;
+	else obliv if (exp ==49)
+		result = 562949953421312;
+	else obliv if (exp ==50)
+		result = 1125899906842624;
+	else obliv if (exp ==51)
+		result = 2251799813685248;
+	else obliv if (exp ==52)
+		result = 4503599627370496;
+	else obliv if (exp ==53)
+		result = 9007199254740992;
+	else obliv if (exp ==54)
+		result = 18014398509481984;
+	else obliv if (exp ==55)
+		result = 36028797018963968;
+	else obliv if (exp ==56)
+		result = 72057594037927936;
+	else obliv if (exp ==57)
+		result = 144115188075855872;
+	else obliv if (exp ==58)
+		result = 288230376151711744;
+	else obliv if (exp ==59)
+		result = 576460752303423488;
+	else obliv if (exp ==60)
+		result = 1152921504606846976;
+	else obliv if (exp ==61)
+		result = 2305843009213693952;
+	else obliv if (exp ==62)
+		result = 4611686018427387904;
+	else obliv if (exp ==63)
+		result = 9223372036854775808;
+	else obliv if (exp ==64)
+		result = 18446744073709551615; // MAX INT64 2^64 == 18446744073709551616 cannot be represented,
+   					   // but it shouldn't be reached, since 2^63 sets the first bit to 1
+    return result;
+}
+
+void
+ normalizeFloat32Subnormal( obits32 aSig, oint16 *zExpPtr, obits32 *zSigPtr ) obliv
+{
+    oint8 shiftCount;
+
+    shiftCount = countLeadingZeros32( aSig ) - 8;
+    *zSigPtr = aSig*(power2(shiftCount));
+    *zExpPtr = 1 - shiftCount;
+}
+
+void normalizeFloat64Subnormal( obits64 aSig, oint16 *zExpPtr, obits64 *zSigPtr ) obliv
+{
+    oint8 shiftCount;
+
+    shiftCount = countLeadingZeros64( aSig ) - 11;
+    *zSigPtr = aSig*(power2_64(shiftCount));
+    *zExpPtr = 1 - shiftCount;
+}
+
+void shift64RightJamming( obits64 a, oint16 count, obits64 *zPtr ) obliv
+{
+    obits64 z;
+	z = 0;
+
+    obliv if ( count == 0 ) {
+        z = a;
+    }
+    else obliv if ( count < 64 ) {
+        //z = ( a>>count ) | ( ( a<<( ( - count ) & 63 ) ) != 0 );
+		z = ( a/power2_64(count) ) | ( ( a*(power2_64( ( - count ) & 63 )) ) != 0 );
+    }
+    else {
+        z = ( a != 0 );
+    }
+    *zPtr = z;
+}
+
+ofloat64 roundAndPackFloat64( oflag zSign, oint16 zExp, obits64 zSig ) obliv
+{
+    oint16 roundIncrement, roundBits;
+
+    roundIncrement = 0x200;
+    roundBits = zSig & 0x3FF;
+    obliv if ( 0x7FD <= (obits16) zExp ) {
+        obliv if ( zExp < 0 ) {
+            shift64RightJamming( zSig, - zExp, &zSig );
+            zExp = 0;
+            roundBits = zSig & 0x3FF;
+        }
+    }
+    zSig = ( zSig + roundIncrement )>>10;
+    oint16 ztest = ~ ( ( ( roundBits ^ 0x200 ) == 0 ) & 1 );
+    zSig &= ztest;
+    obliv if ( zSig == 0 ) zExp = 0;
+    return packFloat64( zSign, zExp, zSig );
+}
+
+oint64 roundAndPackInt64( oflag zSign, obits64 absZ0, obits64 absZ1 ) obliv
+{
+    oint8 roundingMode;
+    oflag roundNearestEven, increment;
+    oint64 z;
+    oflag setVal = 0;
+
+    increment = ( (osbits64) absZ1 < 0 );
+    obliv if ( increment ) {
+        ++absZ0;
+		obliv if ( absZ0 == 0 ) {
+			obliv if (zSign)
+				z = (osbits64) LIT64( 0x8000000000000000 );
+			else
+				z = LIT64( 0x7FFFFFFFFFFFFFFF );
+			setVal = 1;
+		} else
+			absZ0 &= ~ ( ( (obits64) ( absZ1<<1 ) == 0 ) & 1 );
+    }
+	obliv if (!setVal) {
+		z = absZ0;
+		obliv if ( zSign ) z = -1 * z;
+		obliv if (z) {
+			obliv if ( ( z < 0 ) ^ zSign ) {
+				obliv if (zSign)
+					z = (osbits64) LIT64( 0x8000000000000000 );
+				else
+					z = LIT64( 0x7FFFFFFFFFFFFFFF );
+			}
+		}
+	}
+    return z;
+}
+
+oint32 roundAndPackInt32( oflag zSign, obits64 absZ ) obliv
+{
+    oint8 roundingMode;
+    oflag roundNearestEven;
+    oint8 roundIncrement, roundBits;
+    oint32 z;
+
+    roundIncrement = 0x40;
+    roundBits = absZ & 0x7F;
+    absZ = ( absZ + roundIncrement )>>7;
+    absZ &= ~ ( ( ( roundBits ^ 0x40 ) == 0 ) & 1 );
+    z = absZ;
+    obliv if ( zSign ) z = -1 * z;
+	obliv if ( ( absZ>>32 ) ) {
+		obliv if (zSign)
+			z = (osbits32) 0x80000000;
+		else
+			z = 0x7FFFFFFF;
+	} else 
+	 obliv if (z) {
+		obliv if ( (( z < 0 ) ^ zSign) != 0) {
+			obliv if (zSign)
+				z = (osbits32) 0x80000000;
+			else
+				z = 0x7FFFFFFF;
+		}
+    }
+    return z;
+}
+
+ofloat64
+ normalizeRoundAndPackFloat64( oflag zSign, oint16 zExp, obits64 zSig ) obliv
+{
+    oint8 shiftCount;
+
+    shiftCount = countLeadingZeros64( zSig ) - 1;
+    return roundAndPackFloat64( zSign, zExp - shiftCount, zSig*power2_64(shiftCount) );
+}
+
+ofloat64 addFloat64Sigs( ofloat64 a, ofloat64 b, oflag zSign ) obliv
+{
+    oint16 aExp, bExp, zExp;
+    obits64 aSig, bSig, zSig;
+    oint16 expDiff;
+	
+    ofloat64 retVal;
+    oflag setVal = 0;
+
+    aSig = extractFloat64Frac( a );
+    aExp = extractFloat64Exp( a );
+    bSig = extractFloat64Frac( b );
+    bExp = extractFloat64Exp( b );
+    expDiff = aExp - bExp;
+    aSig <<= 9;
+    bSig <<= 9;
+    obliv if ( 0 < expDiff ) {
+        obliv if ( aExp == 0x7FF ) {
+			retVal = a; setVal = 1;
+        }
+        obliv if ( bExp == 0 ) {
+            --expDiff;
+        }
+        else {
+            bSig |= LIT64( 0x2000000000000000 );
+        }
+        shift64RightJamming( bSig, expDiff, &bSig );
+        zExp = aExp;
+    }
+    else obliv if ( expDiff < 0 ) {
+        obliv if ( bExp == 0x7FF ) {
+		retVal = packFloat64( zSign, 0x7FF, 0 ); setVal = 1;
+        }
+        obliv if ( aExp == 0 ) {
+            ++expDiff;
+        }
+        else {
+            aSig |= LIT64( 0x2000000000000000 );
+        }
+        shift64RightJamming( aSig, (-1 * expDiff), &aSig );
+        zExp = bExp;
+    }
+    else {
+        obliv if ( aExp == 0x7FF ) {
+		retVal = a; setVal = 1;
+        }
+        obliv if ( aExp == 0 ){
+			//return packFloat64( zSign, 0, ( aSig + bSig )>>9 );
+			retVal = packFloat64( zSign, 0, ( aSig + bSig )>>9 ); setVal = 1;
+		}
+        zSig = LIT64( 0x4000000000000000 ) + aSig + bSig;
+        zExp = aExp;
+    }
+	
+	obliv if (setVal == 0) {
+		obliv if ((aExp - bExp ) != 0)
+		{
+			aSig |= LIT64( 0x2000000000000000 );
+			zSig = ( aSig + bSig )<<1;
+			--zExp;
+			obliv if ( (osbits64) zSig < 0 ) {
+				zSig = aSig + bSig;
+				++zExp;
+			}
+		}
+	}
+	obliv if (setVal == 0) {
+		retVal = roundAndPackFloat64( zSign, zExp, zSig );
+	}
+	
+	return retVal;
+}
+
+ofloat64 subFloat64Sigs( ofloat64 a, ofloat64 b, oflag zSign ) obliv
+{
+    oint16 aExp, bExp, zExp;
+    obits64 aSig, bSig, zSig;
+    oint16 expDiff;
+    ofloat64 retVal; oflag setVal = 0;
+
+    aSig = extractFloat64Frac( a );
+    aExp = extractFloat64Exp( a );
+    bSig = extractFloat64Frac( b );
+    bExp = extractFloat64Exp( b );
+    expDiff = aExp - bExp;
+    aSig <<= 10;
+    bSig <<= 10;
+	obliv if (0 < expDiff) {
+		aSig |= LIT64( 0x4000000000000000 );
+		obliv if ( aExp == 0x7FF ) { // goto aExpBigger;
+			retVal = a; setVal = 1;
+		}
+		obliv if ( bExp == 0 ) {
+			--expDiff;
+		} else {
+			bSig |= LIT64( 0x4000000000000000 );
+		}
+		shift64RightJamming( bSig, expDiff, &bSig );
+		zSig = aSig - bSig;
+		zExp = aExp;	
+	}
+	else obliv if (expDiff < 0) { // goto bExpBigger;
+		bSig |= LIT64( 0x4000000000000000 );
+		obliv if ( bExp == 0x7FF ) {
+			retVal = packFloat64( zSign ^ 1, 0x7FF, 0 ); setVal = 1;
+		}
+		obliv if ( aExp == 0 ) {
+			++expDiff;
+		}
+		else {
+			aSig |= LIT64( 0x4000000000000000 );
+		}
+		shift64RightJamming( aSig, - expDiff, &aSig );
+		zSig = bSig - aSig;
+		zExp = bExp;
+		zSign ^= 1;	
+	} else {
+		obliv if ( aExp == 0x7FF ) {
+			retVal = LIT64( 0xFFF8000000000000 ); setVal = 1;
+		}
+		obliv if ( aExp == 0 ) {
+			aExp = 1;
+			bExp = 1;
+		}
+		obliv if ( bSig < aSig ) { //goto aBigger;
+			zSig = aSig - bSig;
+			zExp = aExp;
+		}
+		else obliv if ( aSig < bSig ) { //goto bBigger;
+			zSig = bSig - aSig;
+			zExp = bExp;
+			zSign ^= 1;
+		} else {
+			retVal = packFloat64( 0, 0, 0 );
+			setVal = 1;
+		}
+	}
+    --zExp;
+	obliv if (setVal == 0)
+		retVal = normalizeRoundAndPackFloat64( zSign, zExp, zSig );
+
+	return retVal;
+}
+
+ofloat64 float64_add( ofloat64 a, ofloat64 b ) obliv
+{
+    oflag aSign, bSign;
+    ofloat64 retVal;
+
+    aSign = extractFloat64Sign( a );
+    bSign = extractFloat64Sign( b );
+    obliv if ( aSign == bSign ) {
+	retVal = addFloat64Sigs( a, b, aSign );
+    }
+    else {
+	retVal = subFloat64Sigs( a, b, aSign );
+    }
+	
+	return retVal;
+}
+
+ofloat64 float64_sub( ofloat64 a, ofloat64 b ) obliv
+{
+    oflag aSign, bSign;
+    ofloat64 retVal;
+
+    aSign = extractFloat64Sign( a );
+    bSign = extractFloat64Sign( b );
+    obliv if ( aSign == bSign ) {
+	retVal = subFloat64Sigs( a, b, aSign );
+    }
+    else {
+	retVal = addFloat64Sigs( a, b, aSign );
+    }
+	
+	return retVal;
+}
+
+void mul64To128( obits64 a, obits64 b, obits64 *z0Ptr, obits64 *z1Ptr ) obliv
+{
+    obits32 aHigh, aLow, bHigh, bLow;
+    obits64 z0, zMiddleA, zMiddleB, z1;
+
+    aLow = a;
+    aHigh = a>>32;
+    bLow = b;
+    bHigh = b>>32;
+    z1 = ( (obits64) aLow ) * bLow;
+    zMiddleA = ( (obits64) aLow ) * bHigh;
+    zMiddleB = ( (obits64) aHigh ) * bLow;
+    z0 = ( (obits64) aHigh ) * bHigh;
+    zMiddleA += zMiddleB;
+    z0 += ( ( (obits64) ( zMiddleA < zMiddleB ) )<<32 ) + ( zMiddleA>>32 );
+    zMiddleA <<= 32;
+    z1 += zMiddleA;
+    z0 += ( z1 < zMiddleA );
+    *z1Ptr = z1;
+    *z0Ptr = z0;
+}
+
+ofloat64 float64_mul( ofloat64 a, ofloat64 b ) obliv
+{
+    oflag aSign, bSign, zSign;
+    oint16 aExp, bExp, zExp;
+    obits64 aSig, bSig, zSig0, zSig1;
+	
+    ofloat64 retVal;
+    oflag setVal = 0;
+
+    aSig = extractFloat64Frac( a );
+    aExp = extractFloat64Exp( a );
+    aSign = extractFloat64Sign( a );
+    bSig = extractFloat64Frac( b );
+    bExp = extractFloat64Exp( b );
+    bSign = extractFloat64Sign( b );
+    zSign = aSign ^ bSign;
+    obliv if ( aExp == 0x7FF ) {
+	retVal = packFloat64( zSign, 0x7FF, 0 ); setVal = 1;
+    }
+    obliv if ( bExp == 0x7FF ) {
+	retVal = packFloat64( zSign, 0x7FF, 0 ); setVal = 1;
+    }
+    obliv if ( aExp == 0 ) {
+        normalizeFloat64Subnormal( aSig, &aExp, &aSig );
+    }
+    obliv if ( bExp == 0 ) {
+        normalizeFloat64Subnormal( bSig, &bExp, &bSig );
+    }
+    zExp = aExp + bExp - 0x3FF;
+    aSig = ( aSig | LIT64( 0x0010000000000000 ) )<<10;
+    bSig = ( bSig | LIT64( 0x0010000000000000 ) )<<11;
+    mul64To128( aSig, bSig, &zSig0, &zSig1 );
+    zSig0 |= ( zSig1 != 0 );
+    obliv if ( 0 <= (osbits64) ( zSig0<<1 ) ) {
+        zSig0 <<= 1;
+        --zExp;
+    }
+	obliv if (setVal == 0) {
+		retVal = roundAndPackFloat64( zSign, zExp, zSig0 );
+	}
+	return retVal;
+}
+
+void add128(
+     obits64 a0, obits64 a1, obits64 b0, obits64 b1, obits64 *z0Ptr, obits64 *z1Ptr ) obliv
+{
+    obits64 z1;
+
+    z1 = a1 + b1;
+    *z1Ptr = z1;
+    *z0Ptr = a0 + b0 + ( z1 < a1 );
+}
+
+void sub128(obits64 a0, obits64 a1, obits64 b0, obits64 b1, obits64 *z0Ptr, obits64 *z1Ptr ) obliv
+{
+    *z1Ptr = a1 - b1;
+    *z0Ptr = a0 - b0 - ( a1 < b1 );
+}
+
+#define MAXITER_ESTIMATEDIV128 20
+#define MAXITER_FLOAT64DIV 20
+
+obits64 estimateDiv128To64( obits64 a0, obits64 a1, obits64 b ) obliv
+{	
+    obits64 b0, b1;
+    obits64 rem0, rem1, term0, term1;
+    obits64 z;
+
+	obliv if ( b <= a0 ) 
+		z =  LIT64( 0xFFFFFFFFFFFFFFFF );
+	else {
+		b0 = b>>32;
+		obliv if ( b0<<32 <= a0 )
+			z = LIT64( 0xFFFFFFFF00000000);
+		else
+			z = ( a0 / b0 )<<32;
+		mul64To128( b, z, &term0, &term1 );
+		sub128( a0, a1, term0, term1, &rem0, &rem1 );
+		int i = 0;
+		while ( i < MAXITER_ESTIMATEDIV128 ) {
+			obliv if (( (osbits64) rem0 ) < 0) {
+				z -= LIT64( 0x100000000 );
+				b1 = b<<32;
+				add128( rem0, rem1, b0, b1, &rem0, &rem1 );
+			}
+			i++;
+		}
+		rem0 = ( rem0<<32 ) | ( rem1>>32 );
+		obliv if (b0<<32 <= rem0)
+			z |= 0xFFFFFFFF;
+		else
+			z |= rem0 / b0;
+	}
+    return z;
+}
+
+ofloat64 float64_div( ofloat64 a, ofloat64 b ) obliv
+{
+    oflag aSign, bSign, zSign;
+    oint16 aExp, bExp, zExp;
+    obits64 aSig, bSig, zSig;
+    obits64 rem0, rem1;
+    obits64 term0, term1;
+	
+    ofloat64 retVal;
+    oflag setVal = 0;
+
+    aSig = extractFloat64Frac( a );
+    aExp = ( osbits64 ) extractFloat64Exp( a );
+    aSign = extractFloat64Sign( a );
+    bSig = extractFloat64Frac( b );
+    bExp = ( osbits64 ) extractFloat64Exp( b );
+    bSign = extractFloat64Sign( b );
+    zSign = aSign ^ bSign;
+    obliv if ( aExp == 0x7FF ) {
+        obliv if ( bExp == 0x7FF ) {
+		retVal = LIT64( 0xFFF8000000000000 ); setVal = 1;
+        } else {
+		retVal = packFloat64( zSign, 0x7FF, 0 ); setVal = 1;
+	}
+    }
+	obliv if (!setVal) {
+		obliv if ( bExp == 0x7FF ) {
+			retVal = packFloat64( zSign, 0, 0 ); setVal = 1;
+		}
+	}
+	obliv if (!setVal) {
+		obliv if ( bExp == 0 ) {
+			obliv if ( bSig == 0 ) {
+				obliv if ( ( aExp | aSig ) == 0 ) {
+					retVal = LIT64( 0xFFF8000000000000 ); setVal = 1;
+				} else {
+					retVal = packFloat64( zSign, 0x7FF, 0 ); setVal = 1;
+				}
+			}
+			normalizeFloat64Subnormal( bSig, &bExp, &bSig );
+		}
+	}
+	obliv if (!setVal) {
+		obliv if ( aExp == 0 ) {
+			normalizeFloat64Subnormal( aSig, &aExp, &aSig );
+		}
+	}
+	obliv if (!setVal) {
+		zExp = aExp - bExp + 0x3FD;
+		aSig = ( aSig | LIT64( 0x0010000000000000 ) )<<10;
+		bSig = ( bSig | LIT64( 0x0010000000000000 ) )<<11;
+		obliv if ( bSig <= ( aSig + aSig ) ) {
+			aSig >>= 1;
+			++zExp;
+		}
+		zSig = estimateDiv128To64( aSig, 0, bSig );
+		obliv if ( ( zSig & 0x1FF ) <= 2 ) {
+			mul64To128( bSig, zSig, &term0, &term1 );
+			sub128( aSig, 0, term0, term1, &rem0, &rem1 );
+			int i = 0;
+			while ( i < MAXITER_FLOAT64DIV ) {
+				obliv if ((osbits64) rem0 < 0) {
+					--zSig;
+					add128( rem0, rem1, 0, bSig, &rem0, &rem1 );
+				}
+				i++;
+			}
+			zSig |= ( rem1 != 0 );
+		}
+		retVal = roundAndPackFloat64( zSign, zExp, zSig );
+	}
+	return retVal;
+}
+
+ofloat64 float64_round_to_int( ofloat64 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp;
+    obits64 lastBitMask, roundBitsMask;
+    ofloat64 z;
+	
+	ofloat64 retVal = 0;
+
+    aExp = extractFloat64Exp( a );
+    obliv if ( 0x433 <= aExp ) {
+        retVal = a; //return a;
+    }
+    else obliv if ( aExp < 0x3FF ) {
+        obliv if ( (obits64) ( a<<1 ) == 0 )
+			retVal = a; //return a;
+		else {
+			aSign = extractFloat64Sign( a );
+				obliv if (aExp == 0x3FE) {
+					obliv if (extractFloat64Frac(a)) {
+						retVal = packFloat64( aSign, 0x3FF, 0 );
+					}
+				}
+				 else 
+			retVal = packFloat64( aSign, 0, 0 );
+		}
+    }
+    lastBitMask = 1;
+	lastBitMask = lastBitMask * power2_64(0x433 - aExp);
+    roundBitsMask = lastBitMask - 1;
+    z = a;
+        z += lastBitMask>>1;
+        obliv if ( ( z & roundBitsMask ) == 0 ) z &= ~ lastBitMask;
+    z &= ~ roundBitsMask;
+    return z;
+}
+
+ofloat64 float64_fmodf( ofloat64 x, ofloat64 y) obliv
+{
+	ofloat64 abs_y;
+	ofloat64 quotient;
+	oflag signX = extractFloat64Sign(x);
+	
+	abs_y = float64_abs(y);
+	obliv if (signX)
+		quotient = float64_abs(float64_div(x, abs_y));
+	else
+		quotient = float64_div(x, abs_y);
+	
+	ofloat64 result = float64_mul(abs_y, float64_sub(quotient,  float64_round_to_int(quotient) )  );
+	
+	obliv if (signX)
+		result = float64_mul(MINUSONE, result);
+		
+	return result;
+}
+
+void sub64(
+     obits32 a0, obits32 a1, obits32 b0, obits32 b1, obits32 *z0Ptr, obits32 *z1Ptr ) obliv
+{
+    *z1Ptr = a1 - b1;
+    *z0Ptr = a0 - b0 - ( a1 < b1 );
+}
+
+void add64(
+     obits32 a0, obits32 a1, obits32 b0, obits32 b1, obits32 *z0Ptr, obits32 *z1Ptr ) obliv
+{
+    obits32 z1 = 0;
+
+    z1 = a1 + b1;
+    *z1Ptr = z1;
+    *z0Ptr = a0 + b0 + ( z1 < a1 );
+}
+
+void mul32To64( obits32 a, obits32 b, obits32 *z0Ptr, obits32 *z1Ptr ) obliv
+{
+    obits16 aHigh, aLow, bHigh, bLow;
+    obits32 z0, zMiddleA, zMiddleB, z1;
+
+    aLow = a;
+    aHigh = a>>16;
+    bLow = b;
+    bHigh = b>>16;
+    z1 = ( (obits32) aLow ) * bLow;
+    zMiddleA = ( (obits32) aLow ) * bHigh;
+    zMiddleB = ( (obits32) aHigh ) * bLow;
+    z0 = ( (obits32) aHigh ) * bHigh;
+    zMiddleA += zMiddleB;
+    z0 += ( ( (obits32) ( zMiddleA < zMiddleB ) )<<16 ) + ( zMiddleA>>16 );
+    zMiddleA <<= 16;
+    z1 += zMiddleA;
+    z0 += ( z1 < zMiddleA );
+    *z1Ptr = z1;
+    *z0Ptr = z0;
+}
+
+obits32 estimateDiv64To32( obits32 a0, obits32 a1, obits32 b ) obliv
+{
+	#define MAXITER_ESTIMATE64 10 
+
+    obits32 b0, b1;
+    obits32 rem0, rem1, term0, term1;
+    obits32 z;
+
+	obliv if (b <= a0)
+		z = 0xFFFFFFFF;
+	else {
+		b0 = b>>16;
+		obliv if (b0<<16 <= a0) {
+			z = 0xFFFF0000;
+		} else {
+			z = ( a0 / b0 )<<16;
+		}
+		mul32To64( b, z, &term0, &term1 );
+		sub64( a0, a1, term0, term1, &rem0, &rem1 );
+		int i = 0;
+		while ( i < MAXITER_ESTIMATE64 ) { // empirically determine maximum value
+			i++;
+			obliv if ( ( (osbits32) rem0 ) < 0 ) {
+				z -= 0x10000;
+				b1 = b<<16;
+				add64( rem0, rem1, b0, b1, &rem0, &rem1 );
+			}
+		}
+		rem0 = ( rem0<<16 ) | ( rem1>>16 );
+		obliv if ( b0<<16 <= rem0 ) {
+			z |= 0xFFFF;
+		} else {
+			z |= rem0 / b0;
+		}
+	}
+    return z;
+}
+
+void shift32RightJamming( obits32 a, oint16 count, obits32 *zPtr ) obliv
+{
+    obits32 z;
+    z = 0;
+
+    obliv if ( count == 0 ) {
+        z = a;
+    }
+    else obliv if ( count < 32 ) {
+	z = ( a/power2(count)) | ( (a*(power2(( - count ) & 31 ))) != 0 );
+    }
+    else {
+        z = ( a != 0 );
+    }
+    *zPtr = z;
+}
+
+ofloat32 roundAndPackFloat32( oflag zSign, oint16 zExp, obits32 zSig ) obliv
+{
+    oint8 roundIncrement, roundBits;
+
+    roundIncrement = 0x40;
+    roundBits = zSig & 0x7F;
+    obliv if ( 0xFD <= (obits16) zExp ) {
+        obliv if ( zExp < 0 ) {
+            shift32RightJamming( zSig, - zExp, &zSig );
+            zExp = 0;
+            roundBits = zSig & 0x7F;
+        }
+    }
+    zSig = ( zSig + roundIncrement )>>7;
+    oint8 ztest = ~ ( ( ( roundBits ^ 0x40 ) == 0 ) & 1 );
+    zSig &= ztest;
+    obliv if ( zSig == 0 ) zExp = 0;
+    return packFloat32( zSign, zExp, zSig );
+
+}
+
+ofloat32
+ normalizeRoundAndPackFloat32( oflag zSign, oint16 zExp, obits32 zSig ) obliv
+{
+    oint8 shiftCount;
+
+    shiftCount = countLeadingZeros32( zSig ) - 1;
+    return roundAndPackFloat32( zSign, zExp - shiftCount, zSig*(power2(shiftCount)) );
+}
+
+ofloat32 float32_rem( ofloat32 a, ofloat32 b ) obliv
+{
+	// abs((max(expDiff) - 32)/30) = abs((256 - 32) / 30) = 8
+	#define MAXITER_FLOAT32REM_1 8
+	#define MAXITER_FLOAT32REM_2 10
+
+    oflag aSign, bSign, zSign;
+    oint16 aExp, bExp, expDiff;
+    obits32 aSig, bSig, q, allZero, alternateASig;
+    osbits32 sigMean;
+    oflag setVal = 0;
+    ofloat32 retVal;
+
+    aSig = extractFloat32Frac( a );
+    aExp = extractFloat32Exp( a );
+    aSign = extractFloat32Sign( a );
+    bSig = extractFloat32Frac( b );
+    bExp = extractFloat32Exp( b );
+    bSign = extractFloat32Sign( b );
+    obliv if ( bExp == 0xFF ) {
+        retVal = a; setVal = 1;
+    }
+	obliv if (setVal == 0) {
+		obliv if ( bExp == 0 ) {
+			normalizeFloat32Subnormal( bSig, &bExp, &bSig );
+		}
+		obliv if ( aExp == 0 ) {
+			obliv if ( aSig == 0 ) 
+				{ retVal = a; setVal = 1; }
+			else 
+				normalizeFloat32Subnormal( aSig, &aExp, &aSig );
+		}
+		obliv if (setVal == 0) {
+			expDiff = aExp - bExp;
+			aSig = ( aSig | 0x00800000 )<<8;
+			bSig = ( bSig | 0x00800000 )<<8;
+			obliv if ( expDiff < 0 ) {
+				obliv if ( expDiff < -1 ) 
+					{ retVal = a; setVal = 1; }
+				else
+					aSig >>= 1;
+			}
+			obliv if (setVal == 0) {
+				q = ( bSig <= aSig );
+				obliv if ( q ) aSig -= bSig;
+				expDiff -= 32;
+				for (int i = 0; i < MAXITER_FLOAT32REM_1; i++) {
+					obliv if ( 0 < expDiff ) {
+						q = estimateDiv64To32( aSig, 0, bSig );
+						obliv if ( 2 < q )
+							q = q - 2;
+						else
+							q = 0;
+						aSig = -1 * ( ( bSig>>2 ) * q ); //aSig = - ( ( bSig>>2 ) * q );
+						expDiff -= 30;
+					}
+				}
+				expDiff += 32;
+				obliv if ( 0 < expDiff ) {
+					q = estimateDiv64To32( aSig, 0, bSig );
+					obliv if ( 2 < q )
+						q = q - 2;
+					else
+						q = 0;
+					q = q / power2(32 - expDiff);
+					bSig >>= 2;
+					aSig = ( ( aSig>>1 )/power2( expDiff - 1 ) ) - bSig * q;
+				}
+				else {
+					aSig >>= 2;
+					bSig >>= 2;
+				}
+				int j = 0;
+				do {
+					obliv if ( 0 <= (osbits32) aSig ) {
+						alternateASig = aSig;
+						++q;
+						aSig -= bSig;
+					}
+					j++;
+				} while ( j < MAXITER_FLOAT32REM_2 );
+				sigMean = aSig + alternateASig;
+				obliv if ( sigMean < 0 ) {
+					aSig = alternateASig;
+				} else obliv if ( sigMean == 0) {
+					obliv if ( q & 1) {
+						aSig = alternateASig;
+					}
+				}
+				zSign = ( (osbits32) aSig < 0 );
+				obliv if ( zSign ) 
+					aSig = -1 * aSig; //aSig = - aSig;
+
+				obliv if (setVal == 0)
+					retVal = normalizeRoundAndPackFloat32( aSign ^ zSign, bExp, aSig );
+			}
+		}
+	}
+	
+    return retVal;
+}
+
+ofloat64 float64_rem( ofloat64 a, ofloat64 b ) obliv
+{
+	#define MAXITER_FLOAT64REM_1 20 // yet to be empirically determined
+	#define MAXITER_FLOAT64REM_2 20
+
+    oflag aSign, bSign, zSign;
+    oint16 aExp, bExp, expDiff;
+    obits64 aSig, bSig, q, alternateASig;
+    osbits64 sigMean;
+    oflag setVal = 0;
+    ofloat64 retVal;
+
+    aSig = extractFloat64Frac( a );
+    aExp = extractFloat64Exp( a );
+    aSign = extractFloat64Sign( a );
+    bSig = extractFloat64Frac( b );
+    bExp = extractFloat64Exp( b );
+    bSign = extractFloat64Sign( b );
+    obliv if ( bExp == 0x7FF ) {
+	retVal = a; setVal = 1;
+    }
+	obliv if (setVal == 0) {
+		obliv if ( bExp == 0 ) {
+			normalizeFloat64Subnormal( bSig, &bExp, &bSig );
+		}
+		obliv if ( aExp == 0 ) {
+			obliv if ( aSig == 0 ) 
+				{ retVal = a; setVal = 1; }
+			else
+				normalizeFloat64Subnormal( aSig, &aExp, &aSig );
+		}
+		obliv if (setVal == 0) {
+			expDiff = aExp - bExp;
+			aSig = ( aSig | LIT64( 0x0010000000000000 ) )<<11;
+			bSig = ( bSig | LIT64( 0x0010000000000000 ) )<<11;
+			obliv if ( expDiff < 0 ) {
+				obliv if ( expDiff < -1 ) 
+					{ retVal = a; setVal = 1; }
+				else
+					aSig >>= 1;
+			}
+			obliv if (setVal == 0) {
+				q = ( bSig <= aSig );
+				obliv if ( q ) aSig -= bSig;
+				expDiff -= 64;
+				for (int i = 0; i < MAXITER_FLOAT64REM_1; i++) {
+					obliv if (0 < expDiff) {
+						q = estimateDiv128To64( aSig, 0, bSig );
+						obliv if (2 < q)
+							q = q - 2;
+						else
+							q = 0;
+						aSig = -1 * ( ( bSig>>2 ) * q ); //aSig = - ( ( bSig>>2 ) * q );
+						expDiff -= 62;
+					}
+				}
+				expDiff += 64;
+				obliv if ( 0 < expDiff ) {
+					q = estimateDiv128To64( aSig, 0, bSig );
+					obliv if (2 < q)
+						q = q - 2;
+					else
+						q = 0;
+					q = q / power2_64(64 - expDiff);
+					bSig >>= 2;
+					aSig = ( ( aSig>>1 )/power2_64( expDiff - 1 ) ) - bSig * q;
+				}
+				else {
+					aSig >>= 2;
+					bSig >>= 2;
+				}
+				int j = 0;
+				do {
+					obliv if (0 <= (osbits64) aSig) {
+						alternateASig = aSig;
+						++q;
+						aSig -= bSig;
+					}
+					j++;
+				} while ( j < MAXITER_FLOAT64REM_2 );
+				sigMean = aSig + alternateASig;
+				obliv if ( sigMean < 0 ) {
+					aSig = alternateASig;
+				} else obliv if ( sigMean == 0) {
+					obliv if ( (q & 1) != 0) {
+						aSig = alternateASig;
+					}
+				}
+				zSign = ( (osbits64) aSig < 0 );
+				obliv if ( zSign ) 
+					aSig = -1 * aSig; //aSig = - aSig;
+					
+				obliv if (setVal == 0)
+					retVal = normalizeRoundAndPackFloat64( aSign ^ zSign, bExp, aSig );
+			}
+		}
+	}
+	
+	return retVal;
+}
+
+ofloat64 oint64_to_float64 ( osbits64 a ) obliv
+{
+    oflag zSign;
+	ofloat64 retVal = 0;
+
+    obliv if ( a == 0 ) //return 0;
+		retVal = 0;
+	else obliv if ( a == (osbits64) LIT64( 0x8000000000000000 ) ) {
+		retVal = packFloat64( 1, 0x43E, 0 );
+    } 
+	 else {
+		obliv if (a < 0)
+			zSign = 1;
+		else
+			zSign = 0;
+
+		obliv if (zSign)
+			retVal = normalizeRoundAndPackFloat64( zSign, 0x43C, (-1 * a) );
+		else
+			retVal = normalizeRoundAndPackFloat64( zSign, 0x43C, a );
+	}
+	return retVal;
+}
+
+ofloat32 oint64_to_float32( oint64 a ) obliv
+{
+    oflag zSign;
+    oint64 absA;
+    oint8 shiftCount;
+    obits32 zSig;
+	
+	ofloat32 retVal = 0;
+
+    obliv if ( a == 0 )
+		retVal = 0; //return 0;
+	else {
+		obliv if (a < 0)
+			zSign = 1;
+		else
+			zSign = 0;
+		obliv if (zSign)
+			absA = -1 * a;
+		else
+			absA = a;
+		shiftCount = countLeadingZeros64( absA ) - 40;
+		obliv if ( 0 <= shiftCount ) {
+			retVal = packFloat32( zSign, 0x95 - shiftCount, absA*power2_64(shiftCount) );
+		}
+		else {
+			shiftCount += 7;
+			obliv if ( shiftCount < 0 ) {
+				shift64RightJamming( absA, - shiftCount, &absA );
+			} else {
+				absA = absA*power2_64(shiftCount);
+			}
+			retVal = roundAndPackFloat32( zSign, 0x9C - shiftCount, absA );
+		}
+	}
+	return retVal;
+}
+
+ofloat32 float64_to_float32( ofloat64 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp;
+    obits64 aSig;
+    obits32 zSig;
+	
+    ofloat32 retVal = 0;
+
+    aSig = extractFloat64Frac( a );
+    aExp = extractFloat64Exp( a );
+    aSign = extractFloat64Sign( a );
+    
+	obliv if ( aExp == 0x7FF ) {
+		retVal = ( ( (obits32) aSign )<<31 ) + ( ( (obits32) 0xFF )<<23 );
+    } else {
+		aSig = aSig>>22 | ((aSig & (((obits64) 1<<22) - 1)) != 0);
+		zSig = aSig;
+		
+		obliv if (! (aExp | zSig) ) {
+			retVal = packFloat32(aSign, 0, 0);
+		} else {
+			aExp = aExp - 0x381;
+			zSig = zSig | 0x40000000;
+		
+			//retVal = roundAndPackFloat32( aSign, aExp, zSig );
+			{
+				oint8 roundIncrement, roundBits;
+
+				roundIncrement = 0x40;
+				roundBits = zSig & 0x7F;
+				obliv if ( 0xFD <= (obits16) aExp ) {
+					obliv if ( aExp < 0 ) {
+						//shift32RightJamming( zSig, - aExp, &zSig );
+						// also inlined
+						{
+							obits32 z = 0;
+							aExp = -1 * aExp;
+
+							obliv if ( aExp == 0 ) {
+								z = zSig;
+							}
+							else obliv if ( aExp < 32 ) {
+								z = ( zSig/power2(aExp)) | ( (zSig*(power2(( - aExp ) & 31 ))) != 0 );
+							}
+							else {
+								z = ( zSig != 0 );
+							}
+							zSig = z;
+						}
+						
+						aExp = 0;
+						roundBits = zSig & 0x7F;
+					}
+				}
+				zSig = ( zSig + roundIncrement )>>7;
+				oint8 ztest = ~ ( ( ( roundBits ^ 0x40 ) == 0 ) & 1 );
+				zSig &= ztest;
+				obliv if ( zSig == 0 ) aExp = 0;
+				retVal = ( ( (obits32) aSign )<<31 ) + ( ( (obits32) aExp )<<23 ) + zSig;
+			}
+
+		}
+	}
+	
+	return retVal;
+}
+
+ofloat64 float32_to_float64( ofloat32 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp;
+    obits32 aSig;
+	
+    ofloat64 retVal = 0; oflag setVal = 0;
+
+    aSig = extractFloat32Frac( a );
+    aExp = extractFloat32Exp( a );
+    aSign = extractFloat32Sign( a );
+    obliv if ( aExp == 0xFF ) {
+	retVal = packFloat64( aSign, 0x7FF, 0 ); setVal = 1;
+    }
+    else obliv if ( aExp == 0 ) {
+        obliv if ( aSig == 0 ) {
+			retVal = packFloat64( aSign, 0, 0 ); //return packFloat64( aSign, 0, 0 );
+			setVal = 1;
+		} else {
+			//normalizeFloat32Subnormal( aSig, &aExp, &aSig );
+			oint8 shiftCount = countLeadingZeros32( aSig ) - 8;
+			aSig = aSig*(power2(shiftCount));
+			aExp = 1 - shiftCount;
+			aExp = aExp - 1;
+		}
+    }
+	obliv if (setVal == 0) {
+		aExp = aExp + 0x380;
+		retVal = packFloat64( aSign, aExp, ( (obits64) aSig )<<29 );
+	}
+	
+	return retVal;
+}
+
+ofloat32 float32_to_int ( ofloat32 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp, shiftCount;
+    obits32 aSig, aSigExtra;
+    ofloat32 z;
+	oflag setVal = 0;
+
+    aSig = extractFloat32Frac( a );
+    aExp = extractFloat32Exp( a );
+    aSign = extractFloat32Sign( a );
+    shiftCount = aExp - 0x96;
+    obliv if ( 0 <= shiftCount ) {
+        obliv if ( 0x9E <= aExp ) {
+            obliv if ( a != 0xCF000000 ) {
+				obliv if ( ! aSign ) {
+					z = 0x7FFFFFFF; setVal = 1; //return 0x7FFFFFFF;
+				}
+				else obliv if ( aExp == 0xFF )
+					obliv if (aSig ) {
+						z = 0x7FFFFFFF; setVal = 1; //return 0x7FFFFFFF;
+					}
+            }
+			obliv if (!setVal) {
+				z = 0x80000000; setVal = 1;
+			}
+        }
+		obliv if (!setVal) {
+			z = ( aSig | 0x00800000 ) * power2(shiftCount);
+			obliv if ( aSign ) z = -1 * z;
+		}
+    }
+    else {
+        obliv if ( aExp < 0x7E ) {
+            aSigExtra = aExp | aSig;
+            z = 0;
+        }
+        else {
+            aSig |= 0x00800000;
+  	    aSigExtra = aSig * power2(shiftCount & 31);
+	    z = aSig / power2(-shiftCount);
+        }
+            obliv if ( (osbits32) aSigExtra < 0 ) {
+                ++z;
+                obliv if ( (obits32) ( aSigExtra<<1 ) == 0 ) z &= ~1;
+            }
+            obliv if ( aSign ) z = -1 * z;
+    }
+    return z;
+}
+
+void shift64ExtraRightJamming(
+     obits64 a0, obits64 a1, oint16 count, obits64 *z0Ptr, obits64 *z1Ptr ) obliv
+{
+    obits64 z0, z1;
+    oint8 negCount = ( - count ) & 63;
+
+    obliv if ( count == 0 ) {
+        z1 = a1;
+        z0 = a0;
+    }
+    else obliv if ( count < 64 ) {
+	z1 = ( a0*power2_64(negCount) ) | ( a1 != 0 );
+	z0 = a0/power2_64(count);
+    }
+    else {
+        obliv if ( count == 64 ) {
+            z1 = a0 | ( a1 != 0 );
+        }
+        else {
+            z1 = ( ( a0 | a1 ) != 0 );
+        }
+        z0 = 0;
+    }
+    *z1Ptr = z1;
+    *z0Ptr = z0;
+}
+
+oint64 float32_to_int64( ofloat32 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp, shiftCount;
+    obits32 aSig;
+    obits64 aSig64, aSigExtra;
+
+    aSig = extractFloat32Frac( a );
+    aExp = extractFloat32Exp( a );
+    aSign = extractFloat32Sign( a );
+    shiftCount = 0xBE - aExp;
+    obliv if ( aExp ) aSig |= 0x00800000;
+    aSig64 = aSig;
+    aSig64 <<= 40;
+    shift64ExtraRightJamming( aSig64, 0, shiftCount, &aSig64, &aSigExtra );
+    return roundAndPackInt64( aSign, aSig64, aSigExtra );
+}
+
+
+oint64 float32_to_int64_round_to_zero( ofloat32 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp, shiftCount;
+    obits32 aSig;
+    obits64 aSig64;
+    oint64 z;
+
+    aSig = extractFloat32Frac( a );
+    aExp = extractFloat32Exp( a );
+    aSign = extractFloat32Sign( a );
+    shiftCount = aExp - 0xBE;
+    aSig64 = aSig | 0x00800000;
+    aSig64 <<= 40;
+	z = aSig64/power2_64( (-1 *shiftCount) );
+    obliv if ( aSign ) z = -1 * z;
+    return z;
+}
+
+ofloat32 oint32_to_float32 ( osbits32 a ) obliv
+{
+    oflag zSign = 0;
+    ofloat32 retVal = 0;
+    oflag setVal = 0;
+	
+    obliv if ( a == 0 )
+		retVal = 0; //return 0;
+    else obliv if ( a == (osbits32) 0x80000000 ) 
+		retVal = packFloat32( 1, 0x9E, 0 );
+	else {
+		obliv if (a < 0)
+			zSign = 1;
+		else
+			zSign = 0;
+
+		obliv if (zSign)
+			retVal = normalizeRoundAndPackFloat32( zSign, 0x9C, - a );
+		else
+			retVal = normalizeRoundAndPackFloat32( zSign, 0x9C, a );
+	}
+	return retVal;
+}
+
+ofloat64 oint32_to_float64( osbits32 a ) obliv
+{
+    oflag zSign;
+    oint32 absA;
+    oint8 shiftCount;
+    obits64 zSig;
+	
+    ofloat64 retVal = 0;
+
+    obliv if ( a == 0 ) 
+		retVal = 0; //return 0;
+	else {
+		obliv if (a < 0)
+			zSign = 1;
+		else
+			zSign = 0;
+		obliv if (zSign)
+			absA = -1 * a;
+		else
+			absA = a;
+		shiftCount = countLeadingZeros32( absA ) + 21;
+		zSig = absA;
+		retVal = packFloat64( zSign, 0x432 - shiftCount, zSig*power2_64(shiftCount) );
+	}
+	
+	return retVal;
+}
+
+oint32 float64_to_oint32( ofloat64 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp, shiftCount;
+    obits64 aSig;
+
+    aSig = extractFloat64Frac( a );
+    aExp = extractFloat64Exp( a );
+    aSign = extractFloat64Sign( a );
+	obliv if ( aExp == 0x7FF )
+		obliv if (aSig != 0)
+			aSign = 0;
+    obliv if ( aExp != 0)
+		aSig |= LIT64( 0x0010000000000000 );
+    shiftCount = 0x42C - aExp;
+    obliv if ( 0 < shiftCount ) shift64RightJamming( aSig, shiftCount, &aSig );
+    return roundAndPackInt32( aSign, aSig );
+}
+
+oint64 float64_to_oint64( ofloat64 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp, shiftCount;
+    obits64 aSig, aSigExtra;
+
+    aSig = extractFloat64Frac( a );
+    aExp = extractFloat64Exp( a );
+    aSign = extractFloat64Sign( a );
+    obliv if ( aExp ) aSig |= LIT64( 0x0010000000000000 );
+    shiftCount = 0x433 - aExp;
+    obliv if ( shiftCount <= 0 ) {
+        aSigExtra = 0;
+	aSig = aSig * power2_64( (-1*shiftCount) );
+    } else {
+        shift64ExtraRightJamming( aSig, 0, shiftCount, &aSig, &aSigExtra );
+    }
+    return roundAndPackInt64( aSign, aSig, aSigExtra );
+}
+
+
+oint64 float64_to_oint64_round_to_zero( ofloat64 a ) obliv
+{
+    oflag aSign;
+    oint16 aExp, shiftCount;
+    obits64 aSig;
+    oint64 z;
+
+    aSig = extractFloat64Frac( a );
+    aExp = extractFloat64Exp( a );
+    aSign = extractFloat64Sign( a );
+    obliv if ( aExp ) aSig |= LIT64( 0x0010000000000000 );
+    shiftCount = aExp - 0x433;
+    obliv if ( 0 <= shiftCount ) {
+		z = aSig * power2_64(shiftCount);
+    } else {
+        obliv if ( aExp < 0x3FE ) {
+            z = 0; //return 0;
+        } else {
+			z = aSig / power2_64( (-1*shiftCount) );
+		}
+    }
+    obliv if ( aSign ) z = -1 * z;
+    return z;
+}
+
+oflag float32_eq( ofloat32 a, ofloat32 b ) obliv
+{
+    oflag setVal = 0;
+    ofloat32 retVal = 0;
+
+    obliv if ( extractFloat32Exp( a ) == 0xFF ) {
+        obliv if ( extractFloat32Frac( a ) ) {
+            retVal = 0; setVal = 1;
+        }
+    }
+    else obliv if ( extractFloat32Exp( b ) == 0xFF ) {
+        obliv if ( extractFloat32Frac( b ) ) {
+            retVal = 0; setVal = 1;
+        }
+    }
+
+    obliv if (!setVal) {
+        obliv if ( a == b ) {
+            retVal = 1;
+        } else {
+            retVal = ( (obits32) ( ( a | b )<<1 ) == 0 );
+        }
+    }
+
+    return retVal;
+}
+
+oflag float32_lt( ofloat32 a, ofloat32 b ) obliv
+{
+    oflag aSign, bSign;
+
+    oflag setVal = 0;
+    ofloat32 retVal = 0;
+
+    obliv if ( extractFloat32Exp( a ) == 0xFF ) {
+        obliv if ( extractFloat32Frac( a ) ) {
+            retVal = 0; setVal = 1;
+        }
+    }
+    else obliv if ( extractFloat32Exp( b ) == 0xFF ) {
+        obliv if ( extractFloat32Frac( b ) ) {
+            retVal = 0; setVal = 1;
+        }
+    }
+
+    obliv if ( !setVal ) {
+        aSign = extractFloat32Sign( a );
+        bSign = extractFloat32Sign( b );
+        obliv if ( aSign != bSign ) {
+            obliv if ( aSign ) {
+                obliv if ( (obits32) ( ( a | b )<<1 ) != 0 ) {
+                    retVal = 1;
+                }
+            }
+        } else {
+            obliv if ( a != b ) {
+                obliv if ( 1 == ( aSign ^ ( a < b ) ) )
+                    retVal = 1;
+            }
+        }
+    }
+
+    return retVal;
+}
+
+oflag float32_gt( ofloat32 a, ofloat32 b ) obliv
+{
+    oflag aSign, bSign;
+
+    oflag setVal = 0;
+    ofloat32 retVal = 0;
+
+    obliv if ( extractFloat32Exp( a ) == 0xFF ) {
+        obliv if ( extractFloat32Frac( a ) ) {
+            retVal = 0; setVal = 1;
+        }
+    }
+    else obliv if ( extractFloat32Exp( b ) == 0xFF ) {
+        obliv if ( extractFloat32Frac( b ) ) {
+            retVal = 0; setVal = 1;
+        }
+    }
+
+    obliv if ( !setVal ) {
+        aSign = extractFloat32Sign( a );
+        bSign = extractFloat32Sign( b );
+        obliv if ( aSign != bSign ) {
+            obliv if ( bSign ) {
+                obliv if ( (obits32) ( ( a | b )<<1 ) != 0 ) {
+                    retVal = 1;
+                }
+            }
+        } else {
+            obliv if ( a != b ) {
+                obliv if (1 == ( bSign ^ ( a > b ) ))
+                    retVal = 1;
+            }
+        }
+    }
+
+    return retVal;
+}
+
+oflag float32_is_NaN(ofloat32 f) obliv
+{
+	oflag retVal = false;
+
+	obliv if (( f & 0x7f800000) == 0x7f800000)
+		obliv if (( f & 0x007fffff) != 0)
+			retVal = true;
+		else
+			retVal = false;
+	else
+		retVal = false;
+
+	return retVal;
+}
+
+oflag float64_is_NaN(ofloat64 f) obliv
+{
+        oflag retVal = false;
+
+        obliv if (( f & 0x7FF0000000000000) == 0x7FF0000000000000)
+                obliv if (( f & 0x000FFFFFFFFFFFFF) != 0)
+                        retVal = true;
+                else
+                        retVal = false;
+        else
+                retVal = false;
+
+        return retVal;
+}
+
+oflag float64_lt( ofloat64 a, ofloat64 b ) obliv
+{
+    oflag aSign, bSign;
+	
+	oflag setVal = 0; oflag retVal = 0;
+
+	obliv if ( extractFloat64Exp( a ) == 0x7FF ) {
+		obliv if ( extractFloat64Frac( a ) ) {
+			retVal = 0; setVal = 1;
+		}
+	}
+	else obliv if ( extractFloat64Exp( b ) == 0x7FF ) {
+		obliv if ( extractFloat64Frac( b ) ) {
+			retVal = 0; setVal = 1;
+		}
+	}
+	
+	obliv if (!setVal) {
+		aSign = extractFloat64Sign( a );
+		bSign = extractFloat64Sign( b );
+		obliv if ( aSign != bSign ) {
+			obliv if (aSign) {
+				obliv if ( (obits64) ( ( a | b )<<1 ) != 0 ) {
+					retVal = 1;
+				}
+			}
+		} else {
+			obliv if ( a != b ) {
+				obliv if ( ( aSign ^ ( a < b ) ) == 1 ) {
+					retVal = 1;
+				}
+			}
+		}
+	}
+	
+	return retVal;
+}
+
+oflag float64_gt( ofloat64 a, ofloat64 b ) obliv
+{
+    oflag aSign, bSign;
+	
+	oflag setVal = 0; oflag retVal = 0;
+
+	obliv if ( extractFloat64Exp( a ) == 0x7FF ) {
+		obliv if ( extractFloat64Frac( a ) ) {
+			retVal = 0; setVal = 1;
+		}
+	}
+	else obliv if ( extractFloat64Exp( b ) == 0x7FF ) {
+		obliv if ( extractFloat64Frac( b ) ) {
+			retVal = 0; setVal = 1;
+		}
+	}
+	
+	obliv if ( !setVal ) {
+		aSign = extractFloat64Sign( a );
+		bSign = extractFloat64Sign( b );
+		obliv if ( aSign != bSign ) {
+			obliv if ( bSign ) {
+				obliv if ( (obits64) ( ( a | b )<<1 ) != 0 ) {
+					retVal = 1;
+				}
+			}
+		} else {
+			obliv if ( a != b ) {
+				obliv if (1 == ( bSign ^ ( a > b ) )) {
+					retVal = 1;
+				}
+			}
+		}
+	}
+	
+	return retVal;
+}
+
+oflag float64_eq( ofloat64 a, ofloat64 b ) obliv
+{
+	oflag setVal = 0; oflag retVal = 0;
+
+	obliv if ( extractFloat64Exp( a ) == 0x7FF ){
+		obliv if ( extractFloat64Frac( a ) ) {
+			retVal = 0; setVal = 1;
+		}
+	}
+	else obliv if ( extractFloat64Exp( b ) == 0x7FF ) {
+		obliv if ( extractFloat64Frac( b ) ) {
+			retVal = 0; setVal = 1;
+		}
+	}
+	
+	obliv if (!setVal) {
+		obliv if ( a == b) {
+			retVal = 1;
+		} else {
+			retVal = ( (obits64) ( ( a | b )<<1 ) == 0 );
+		}
+	}
+	
+	return retVal;
+}
+
+// No support in Obliv-C for shift operators with two oblivious operands: use (* or /) by power2
+oint intLeftShift (oint a, oint b) obliv
+{
+	return a * power2(b);
+}
+
+olong longLeftShift (olong a, olong b) obliv
+{
+	return a * power2_64(b);
+}
+
+oint intRightShift (oint a, oint b) obliv
+{
+        return a / power2(b);
+}
+
+oint intURightShift (oint a, oint b) obliv
+{
+	obliv if (a<0)
+		a = a * -1;
+        return a / power2(b);
+}
+
+olong longRightShift (olong a, olong b) obliv
+{
+        return a / power2_64(b);
+}
+
+olong longURightShift (olong a, olong b) obliv
+{
+	obliv if (a<0)
+		a = a * -1;
+        return a / power2_64(b);
+}
+
+ofloat32 float32_neg(ofloat32 a) obliv
+{
+	return a ^ 0x80000000;
+}
+
+ofloat64 float64_neg(ofloat64 a) obliv
+{
+	return a ^ 0x8000000000000000;
+}
+
+ofloat64 long2Double(olong a) obliv
+{
+	return oint64_to_float64(a);
+}
+
+ofloat32 long2Float(olong a) obliv
+{
+	return oint64_to_float32(a);
+}
+
+oint long2Int (olong a) obliv
+{
+	return (oint) a;
+}
+
+ofloat32 double2Float(ofloat64 a) obliv
+{
+	return float64_to_float32(a);
+}
+
+ofloat64 float2Double(ofloat32 a) obliv
+{
+	return float32_to_float64(a);
+}
+
+ofloat64 int2Double(oint a) obliv
+{
+	return oint32_to_float64(a);
+}
+
+ofloat32 int2Float(oint a) obliv
+{
+	return oint32_to_float32(a);
+}
+
+olong int2Long(oint a) obliv
+{
+	return (olong) a;
+}
+
+obyte int2Char(oint a) obliv
+{
+	return (obyte) a;
+}
+
+oint16 int2Short(oint a) obliv
+{
+	return (oint16) a;
+}
+
+obyte int2Byte(oint a) obliv
+{
+        return (obyte) a;
+}
+
+oint longCompare(olong a, olong b) obliv
+{
+	// return (VMlongLt(op1, op2) ? -1 : VMlongGt(op1, op2) ? 1 : 0);
+
+	oint retVal = 0;
+
+	obliv if (a<b)
+		retVal = -1;
+	else obliv if (a>b)
+		retVal = 1;
+
+	return retVal;
+}
+
+oint floatCompare(ofloat32 op1, ofloat32 op2, int direction) obliv
+{
+	//return ( op1 < op2 ? -1 : op1 > op2 ? 1 : op1 == op2 ? 0 : (direction == -1 || direction == 1) ? direction : 0);
+
+	oint retVal = (direction == -1 || direction == 1) ? direction : 0;
+
+	obliv if (float32_is_NaN(op1)) {
+		// NOP
+	} else obliv if (float32_is_NaN(op2)) {
+		// NOP
+	}
+	else obliv if (float32_lt(op1, op2))
+		retVal = -1;
+	else obliv if (float32_gt(op1, op2))
+		retVal = 1;
+	else obliv if (float32_eq(op1, op2))
+		retVal = 0;
+	
+	return retVal; 
+}
+
+oint doubleCompare(ofloat64 op1, ofloat64 op2, int direction) obliv
+{
+        //return ( op1 < op2 ? -1 : op1 > op2 ? 1 : op1 == op2 ? 0 : (direction == -1 || direction == 1) ? direction : 0);
+
+        oint retVal = (direction == -1 || direction == 1) ? direction : 0;
+
+        obliv if (float64_is_NaN(op1)) {
+                // NOP
+        } else obliv if (float64_is_NaN(op2)) {
+                // NOP
+        }
+        obliv if (float64_lt(op1, op2))
+                retVal = -1;
+        else obliv if (float64_gt(op1, op2))
+                retVal = 1;
+        else obliv if (float64_eq(op1, op2))
+                retVal = 0;
+
+        return retVal;
+}
+
+void testIF()
+{
+	obliv int x, y, z;
+	int a = 1, b = 2, c = 0;
+	x = 1;
+	y = 2;
+	z = 0;
+
+
+	obliv if (x<y){
+		z = x+y;
+	} else {
+		z = y-x;
+	}
+
+	int result;
+	revealOblivInt(&result , z, 0);
+}
+
+oint lessThan (oint a, oint b) obliv
+{
+	return a < b;
+}
+
+oint lessThanZero (oint a) obliv
+{
+	return a < 0;
+}
+
+oint greaterThan (oint a, oint b) obliv
+{
+	return a > b;
+}
+
+oint greaterThanZero (oint a) obliv
+{
+	return a > 0;
+}
+
+oint lessEqual (oint a, oint b) obliv
+{
+	return a <= b;
+}
+
+oint lessEqualZero (oint a) obliv
+{
+	return a <= 0;
+}
+
+oint greaterEqual (oint a, oint b) obliv
+{
+	return a >= b;
+}
+
+oint greaterEqualZero (oint a) obliv
+{
+	return a >= 0;
+}
+
+oint equal (oint a, oint b) obliv
+{
+	return a == b;
+}
+
+oint equalZero (oint a) obliv
+{
+	return a == 0;
+}
+
+oint notEqual(oint a, oint b) obliv
+{
+	return a != b;
+}
+
+oint notEqualZero (oint a) obliv
+{
+	return a != 0;
+}
+
+oint flip1and0(oint a) obliv
+{
+	oint ret = a;
+
+	obliv if (a == 1)
+		ret = 0;
+	else obliv if (a == 0)
+		ret = 1;
+
+	return ret;
+}
+
+oflag convertIntToBool(oint a) obliv
+{
+	return (oflag) (a & 1);
+}
+
+void goadd(void* vargs)
+{
+  protocolIO64 *io=vargs;
+  ofloat64 a, b, resultA;
+
+  a = feedOblivLLong(io->input, 1);
+  b = feedOblivLLong(io->input, 2);
+
+  fprintf(stderr,"Input: %llX\n", io->input);
+
+  resultA = float64_add(a, b);
+  revealOblivLLong(&io->result, resultA, 0);
+
+  fprintf(stderr,"Result: %llX\n", io->result);
+  fprintf(stderr,"Yao gate count: %u\n",yaoGateCount());
+}

@@ -1,0 +1,14 @@
+Welcome to Obliv-Java!
+======================
+
+Compile with maven:
+
+	mvn compile
+
+To test with default example ("src/main/java/com/calctopia/oblivjava/ClassIf.java"):
+
+	mvn exec:java
+
+To implictly specify the file:
+
+	mvn exec:java -Dexec.args="src/main/java/com/calctopia/oblivjava/ClassIf.java"
