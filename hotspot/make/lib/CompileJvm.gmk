@@ -227,6 +227,7 @@ $(eval $(call SetupNativeCompilation, BUILD_LIBJVM, \
         1540-1088 1500-010, \
     ASFLAGS := $(JVM_ASFLAGS), \
     LDFLAGS := $(JVM_LDFLAGS), \
+    LDFLAGS_linux := $(call SET_SHARED_LIBRARY_ORIGIN,/..), \
     LIBS := $(JVM_LIBS), \
     OPTIMIZATION := $(JVM_OPTIMIZATION), \
     OBJECT_DIR := $(JVM_OUTPUTDIR)/objs, \
